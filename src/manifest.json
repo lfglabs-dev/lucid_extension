@@ -3,6 +3,13 @@
   "name": "Lucid",
   "version": "1.0.0",
   "description": "Intercepts and logs Ethereum transactions for enhanced security",
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
@@ -17,5 +24,11 @@
       "matches": ["<all_urls>"]
     }
   ],
-  "permissions": ["scripting"]
+  "permissions": [
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "http://0.0.0.0:8080/*"
+  ]
 }
