@@ -12,10 +12,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     const deepLink = `${APP_LINK}/--/connect?token=${linkToken}`;
     const tokenOnlyUrl = `token-${linkToken}`;
+    const deviceName = navigator.userAgent;
     
     const combinedData = JSON.stringify({
       app: deepLink,
-      token: tokenOnlyUrl
+      token: tokenOnlyUrl,
+      name: deviceName 
     });
 
     const qrCodeDataUrl = await QRCode.toDataURL(combinedData, {

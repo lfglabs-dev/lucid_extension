@@ -23,3 +23,15 @@ chrome.runtime.onStartup.addListener(() => {
   console.log('Extension starting up');
   checkAndRefreshAuth();
 });
+
+// Handle messages from content script
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'GET_AUTH_TOKEN') {
+    // Get the auth token and send it back
+    chrome.storage.local.get(['lucid_auth'], (result) => {
+      const token = result.lucid_auth?.data?.jwt;
+      sendResponse({ token });
+    });
+    return true; // Will respond asynchronously
+  }
+});

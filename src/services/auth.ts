@@ -151,15 +151,12 @@ interface ApiResponse<T> {
 export async function getLinkToken(): Promise<ApiResponse<string>> {
   console.log('Getting link token...');
   try {
-    const stored = await chrome.storage.local.get(['auth']);
-    if (!stored.auth?.jwt) {
-      throw new Error('No JWT found');
-    }
+    const auth = await getOrRefreshAuth();
 
     const response = await fetch(`${LUCID_API_URL}/link_token`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${stored.auth.jwt}`,
+        'Authorization': `Bearer ${auth.data.jwt}`,
         'Content-Type': 'application/json',
       }
     });

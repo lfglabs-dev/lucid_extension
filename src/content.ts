@@ -54,6 +54,19 @@ try {
     childList: true,
     subtree: true,
   });
+
+  // Handle messages from the injected script
+  window.addEventListener('message', async (event) => {
+    if (event.data.type === 'GET_AUTH_TOKEN') {
+      try {
+        const response = await chrome.runtime.sendMessage({ type: 'GET_AUTH_TOKEN' });
+        window.postMessage({ type: 'AUTH_TOKEN_RESPONSE', token: response?.token }, '*');
+      } catch (error) {
+        console.error('[Lucid] Error getting auth token:', error);
+        window.postMessage({ type: 'AUTH_TOKEN_RESPONSE', token: null }, '*');
+      }
+    }
+  });
 } catch (e) {
   console.error("[Lucid] Error:", e);
 }
