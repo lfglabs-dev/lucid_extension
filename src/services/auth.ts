@@ -1,6 +1,6 @@
 import { LUCID_API_URL } from "../config";
 
-const AUTH_STORAGE_KEY = "lucid_auth";
+export const AUTH_STORAGE_KEY = "lucid_auth";
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 // Debug helper

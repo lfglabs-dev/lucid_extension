@@ -5,6 +5,8 @@ import {
   WindowWithEthereum,
 } from "./types";
 import { LUCID_API_URL } from "./config";
+import { AUTH_STORAGE_KEY } from "./services/auth";
+import { encode } from "cbor-x";
 
 /**
  * Type for EIP-712 transaction data
@@ -36,6 +38,46 @@ interface EIP712SafeTx {
   let lastRequestKey: string | null = null;
 
   /**
+   * Encrypts transaction data using AES-256-GCM
+   * @param transaction - The transaction data to encrypt
+   * @param encryptionKey - The AES-256-GCM key to use for encryption
+   * @returns Base64 encoded string with IV and encrypted data
+   */
+  async function encryptTransaction(
+    transaction: EIP712SafeTx,
+    encryptionKey: CryptoKey
+  ): Promise<string> {
+    try {
+      // Generate a random IV
+      const iv = window.crypto.getRandomValues(new Uint8Array(12));
+
+      // Encode the transaction data using CBOR
+      const encodedData = encode(transaction);
+
+      // Encrypt the data
+      const encryptedData = await window.crypto.subtle.encrypt(
+        {
+          name: "AES-GCM",
+          iv: iv,
+        },
+        encryptionKey,
+        encodedData
+      );
+
+      // Combine IV and encrypted data
+      const result = new Uint8Array(iv.length + encryptedData.byteLength);
+      result.set(iv, 0);
+      result.set(new Uint8Array(encryptedData), iv.length);
+
+      // Convert to base64 for transmission
+      return btoa(String.fromCharCode.apply(null, Array.from(result)));
+    } catch (error) {
+      console.error("[Lucid] Encryption error:", error);
+      throw new Error("Failed to encrypt transaction data");
+    }
+  }
+
+  /**
    * Sends a transaction request to the server
    * @param content - The EIP-712 transaction content to send
    */
@@ -44,8 +86,8 @@ interface EIP712SafeTx {
       // Get the auth token through window.postMessage
       const token = await new Promise<string>((resolve, reject) => {
         const messageHandler = (event: MessageEvent) => {
-          if (event.data.type === 'AUTH_TOKEN_RESPONSE') {
-            window.removeEventListener('message', messageHandler);
+          if (event.data.type === "AUTH_TOKEN_RESPONSE") {
+            window.removeEventListener("message", messageHandler);
             if (event.data.error) {
               console.error("[Lucid] Auth token error:", event.data.error);
               reject(new Error(event.data.error));
@@ -56,65 +98,87 @@ interface EIP712SafeTx {
             }
           }
         };
-        window.addEventListener('message', messageHandler);
-        window.postMessage({ type: 'GET_AUTH_TOKEN' }, '*');
+        window.addEventListener("message", messageHandler);
+        window.postMessage({ type: "GET_AUTH_TOKEN" }, "*");
       });
-      
+
       if (!token) {
         console.error("[Lucid] No auth token available");
         return;
       }
 
       const requiredFields: (keyof EIP712SafeTx)[] = [
-        'from', 'to', 'value', 'data', 'operation', 
-        'safeTxGas', 'baseGas', 'gasPrice', 'gasToken', 
-        'refundReceiver', 'nonce'
+        "from",
+        "to",
+        "value",
+        "data",
+        "operation",
+        "safeTxGas",
+        "baseGas",
+        "gasPrice",
+        "gasToken",
+        "refundReceiver",
+        "nonce",
       ];
 
       for (const field of requiredFields) {
         if (content[field] === undefined) {
-          throw new Error(`The field ${field} in the transaction content is undefined`);
+          throw new Error(
+            `The field ${field} in the transaction content is undefined`
+          );
         }
       }
 
       const requestContent: EIP712SafeTx = {
-          chainId: content.chainId,
-          safeAddress: content.safeAddress,
-          from: content.from,
-          to: content.to,
-          value: content.value,
-          data: content.data,
-          operation: content.operation,
-          safeTxGas: content.safeTxGas,
-          baseGas: content.baseGas,
-          gasPrice: content.gasPrice,
-          gasToken: content.gasToken,
-          refundReceiver: content.refundReceiver,
-          nonce: content.nonce
-        }
+        chainId: content.chainId,
+        safeAddress: content.safeAddress,
+        from: content.from,
+        to: content.to,
+        value: content.value,
+        data: content.data,
+        operation: content.operation,
+        safeTxGas: content.safeTxGas,
+        baseGas: content.baseGas,
+        gasPrice: content.gasPrice,
+        gasToken: content.gasToken,
+        refundReceiver: content.refundReceiver,
+        nonce: content.nonce,
+      };
+
+      const stored = await chrome.storage.local.get([AUTH_STORAGE_KEY]);
+      const auth = stored[AUTH_STORAGE_KEY];
+      const encryptionKey = auth.encryptionKey;
+
+      // Encrypt the transaction content
+      const encryptedContent = await encryptTransaction(
+        requestContent,
+        encryptionKey
+      );
 
       const requestBody = {
         request_type: "eip712",
-        content: requestContent
+        content: encryptedContent,
       };
 
       console.log("[Lucid] Sending EIP-712 transaction to server:", {
         url: `${LUCID_API_URL}/request`,
-        body: requestBody
+        body: requestBody,
       });
 
       const serverResponse = await fetch(`${LUCID_API_URL}/request`, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify(requestBody),
       });
-      
+
       if (!serverResponse.ok) {
         const errorText = await serverResponse.text();
-        throw new Error(`Server error: ${serverResponse.status} - ${errorText}`);
+        throw new Error(
+          `Server error: ${serverResponse.status} - ${errorText}`
+        );
       }
 
       const data = await serverResponse.json();
@@ -188,9 +252,14 @@ interface EIP712SafeTx {
             });
 
             // If it's an eth_signTypedData_v4 (EIP-712) request, send it to the server
-            if (payload.method === "eth_signTypedData_v4" && txParams && payload.params && payload.params[1]) {
+            if (
+              payload.method === "eth_signTypedData_v4" &&
+              txParams &&
+              payload.params &&
+              payload.params[1]
+            ) {
               console.log("[Lucid] Detected EIP-712 transaction");
-              
+
               // Parse the EIP-712 data from params[1]
               try {
                 const eip712Data = JSON.parse(payload.params[1] as string);
@@ -209,11 +278,11 @@ interface EIP712SafeTx {
                   gasPrice: eip712Data.message.gasPrice,
                   gasToken: eip712Data.message.gasToken,
                   refundReceiver: eip712Data.message.refundReceiver,
-                  nonce: eip712Data.message.nonce
+                  nonce: eip712Data.message.nonce,
                 };
-                
+
                 console.log("[Lucid] Extracted transaction data:", txData);
-                
+
                 sendEIP712Request(txData);
               } catch (error) {
                 console.error("[Lucid] Error parsing EIP-712 data:", error);
