@@ -3,12 +3,22 @@
   "name": "Lucid",
   "version": "1.0.0",
   "description": "Intercepts and logs Ethereum transactions for enhanced security",
+  "icons": {
+    "16": "icons/lucid16.png",
+    "48": "icons/lucid48.png",
+    "128": "icons/lucid128.png"
+  },
   "background": {
     "service_worker": "background.js",
     "type": "module"
   },
   "action": {
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/lucid16.png",
+      "48": "icons/lucid48.png",
+      "128": "icons/lucid128.png"
+    }
   },
   "content_scripts": [
     {

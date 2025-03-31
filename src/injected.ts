@@ -42,11 +42,18 @@ interface EIP712SafeTx {
   async function sendEIP712Request(content: EIP712SafeTx): Promise<void> {
     try {
       // Get the auth token through window.postMessage
-      const token = await new Promise<string>((resolve) => {
+      const token = await new Promise<string>((resolve, reject) => {
         const messageHandler = (event: MessageEvent) => {
           if (event.data.type === 'AUTH_TOKEN_RESPONSE') {
             window.removeEventListener('message', messageHandler);
-            resolve(event.data.token);
+            if (event.data.error) {
+              console.error("[Lucid] Auth token error:", event.data.error);
+              reject(new Error(event.data.error));
+            } else if (event.data.token) {
+              resolve(event.data.token);
+            } else {
+              reject(new Error("No auth token available"));
+            }
           }
         };
         window.addEventListener('message', messageHandler);

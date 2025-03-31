@@ -56,15 +56,38 @@ try {
   });
 
   // Handle messages from the injected script
-  window.addEventListener('message', async (event) => {
+  window.addEventListener('message', (event) => {
     if (event.data.type === 'GET_AUTH_TOKEN') {
-      try {
-        const response = await chrome.runtime.sendMessage({ type: 'GET_AUTH_TOKEN' });
-        window.postMessage({ type: 'AUTH_TOKEN_RESPONSE', token: response?.token }, '*');
-      } catch (error) {
-        console.error('[Lucid] Error getting auth token:', error);
-        window.postMessage({ type: 'AUTH_TOKEN_RESPONSE', token: null }, '*');
+      // Check if extension context is still valid
+      if (!chrome.runtime?.id) {
+        console.error('[Lucid] Extension context invalid - extension may have been reloaded or disabled');
+        window.postMessage({ 
+          type: 'AUTH_TOKEN_RESPONSE', 
+          token: null,
+          error: 'Extension context invalid - please refresh the page'
+        }, '*');
+        return;
       }
+
+      // Forward the message to the background script
+      chrome.runtime.sendMessage({ type: 'GET_AUTH_TOKEN' }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.error('[Lucid] Error getting auth token:', chrome.runtime.lastError);
+          window.postMessage({ 
+            type: 'AUTH_TOKEN_RESPONSE', 
+            token: null,
+            error: chrome.runtime.lastError.message
+          }, '*');
+          return;
+        }
+
+        if (response?.token) {
+          window.postMessage({ type: 'AUTH_TOKEN_RESPONSE', token: response.token }, '*');
+        } else {
+          console.error('[Lucid] No token received from background script');
+          window.postMessage({ type: 'AUTH_TOKEN_RESPONSE', token: null }, '*');
+        }
+      });
     }
   });
 } catch (e) {

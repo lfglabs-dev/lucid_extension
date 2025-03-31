@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "build": "bun build ./src/content.ts --outdir ./dist && bun build ./src/injected.ts --outdir ./dist && bun build ./src/popup.ts --outdir ./dist && bun build ./src/background.ts --outdir ./dist && bun run copy-manifest",
-    "copy-manifest": "cp src/manifest.json dist/ && cp src/popup.html dist/ && echo 'Copied manifest and popup.html to dist'",
+    "copy-manifest": "cp src/manifest.json dist/ && cp src/popup.html dist/ && cp -r src/icons dist/ && echo 'Copied manifest, popup.html, and icons to dist'",
     "dev": "bun run build",
     "clean": "rm -rf dist",
     "watch": "bun build ./src/content.ts ./src/injected.ts ./src/popup.ts --outdir ./dist --watch"
