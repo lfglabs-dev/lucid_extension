@@ -4,9 +4,12 @@
   <title>Lucid Extension</title>
   <style>
     body {
-      width: 300px;
-      padding: 20px;
+      width: 360px;
+      padding: 24px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background-color: #0F0F0F;
+      color: white;
+      margin: 0;
     }
     .container {
       display: flex;
@@ -15,42 +18,68 @@
       text-align: center;
     }
     h1 {
-      font-size: 18px;
-      margin-bottom: 16px;
-      color: #333;
+      font-size: 24px;
+      margin-bottom: 20px;
+      color: white;
+      font-weight: 600;
+      line-height: 1.2;
+    }
+    .highlight {
+      color: #00FF8C;
     }
     .instructions {
-      margin-bottom: 20px;
-      color: #666;
-      font-size: 14px;
-      line-height: 1.5;
+      margin-bottom: 24px;
+      color: #ADADAD;
+      font-size: 15px;
+      line-height: 1.6;
+      width: 100%;
     }
     .instructions ol {
       text-align: left;
-      padding-left: 20px;
+      padding-left: 24px;
+      margin: 0;
     }
     .instructions li {
-      margin-bottom: 8px;
+      margin-bottom: 12px;
     }
     #qrcode {
-      margin: 20px 0;
-      padding: 10px;
-      background: white;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin: 24px 0;
+      padding: 16px;
+      background: #1C1C1C;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 255, 140, 0.05);
+      border: 1px solid rgba(0, 255, 140, 0.1);
+    }
+    .glow-container {
+      position: relative;
+    }
+    .glow-container::before {
+      content: '';
+      position: absolute;
+      top: -2px;
+      left: -2px;
+      right: -2px;
+      bottom: -2px;
+      background: linear-gradient(45deg, #00FF8C, #00CC70);
+      border-radius: 14px;
+      z-index: -1;
+      opacity: 0.15;
+      filter: blur(12px);
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <h1>Link your Lucid Mobile app</h1>
+    <h1>Link your<span class="highlight"> Lucid mobile App</span></h1>
     <div class="instructions">
       <ol>
-        <li>Install the Lucid Mobile app on App Store or Google Play</li>
-        <li>Scan this QR code to link your Lucid Mobile app</li>
+        <li>Scan this QR code and open the Lucid Mobile app</li>
+        <li>Start transaction using this laptop and verify what you sign on the app</li>
       </ol>
     </div>
-    <div id="qrcode"></div>
+    <div class="glow-container">
+      <div id="qrcode"></div>
+    </div>
   </div>
   <script src="popup.js"></script>
 </body>
