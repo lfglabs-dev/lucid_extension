@@ -75,8 +75,9 @@ async function registerDevice(): Promise<AuthResponse> {
     }
 
     const responseData = await response.json();
+    const encryptionKey = await generateEncryptionKey();
     debugLog("Register success", { device_id: responseData.data.device_id });
-    return responseData;
+    return { ...responseData, encryptionKey };
   } catch (error) {
     debugLog(
       "Register error",
@@ -107,8 +108,9 @@ async function refreshSession(jwt: string): Promise<AuthResponse> {
     }
 
     const data = await response.json();
+    const encryptionKey = await generateEncryptionKey();
     debugLog("Refresh success", { device_id: data.data?.device_id });
-    return data;
+    return { ...data, encryptionKey };
   } catch (error) {
     debugLog(
       "Refresh error",
@@ -129,9 +131,8 @@ export async function getOrRefreshAuth(): Promise<AuthResponse> {
       }
       try {
         const refreshed = await refreshSession(auth.data.jwt);
-        const encryptionKey = await generateEncryptionKey();
         await chrome.storage.local.set({
-          [AUTH_STORAGE_KEY]: { ...refreshed, encryptionKey },
+          [AUTH_STORAGE_KEY]: refreshed,
         });
         return refreshed;
       } catch (error) {
@@ -143,9 +144,8 @@ export async function getOrRefreshAuth(): Promise<AuthResponse> {
     }
 
     const newAuth = await registerDevice();
-    const encryptionKey = await generateEncryptionKey();
     await chrome.storage.local.set({
-      [AUTH_STORAGE_KEY]: { ...newAuth, encryptionKey },
+      [AUTH_STORAGE_KEY]: newAuth,
     });
     return newAuth;
   } catch (error) {
