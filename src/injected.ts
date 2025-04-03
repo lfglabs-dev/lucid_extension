@@ -49,13 +49,13 @@ interface EIP712SafeTx {
   ): Promise<string> {
     try {
       // Generate a random IV
-      const iv = window.crypto.getRandomValues(new Uint8Array(12));
+      const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
 
       // Encode the transaction data using CBOR
       const encodedData = encode(transaction);
 
       // Encrypt the data
-      const encryptedData = await window.crypto.subtle.encrypt(
+      const encryptedData = await globalThis.crypto.subtle.encrypt(
         {
           name: "AES-GCM",
           iv: iv,
@@ -147,7 +147,17 @@ interface EIP712SafeTx {
 
       const stored = await chrome.storage.local.get([AUTH_STORAGE_KEY]);
       const auth = stored[AUTH_STORAGE_KEY];
-      const encryptionKey = auth.encryptionKey;
+      const jwk: JsonWebKey = auth.encryptionKey;
+      if (!jwk) {
+        throw new Error("No encryption key available");
+      }
+      const encryptionKey: CryptoKey = await globalThis.crypto.subtle.importKey(
+        "jwk",
+        jwk,
+        { name: "AES-GCM" },
+        true,
+        ["encrypt", "decrypt"]
+      );
 
       // Encrypt the transaction content
       const encryptedContent = await encryptTransaction(

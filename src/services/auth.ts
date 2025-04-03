@@ -202,13 +202,13 @@ export async function getLinkToken(): Promise<ApiResponse<string>> {
 
 /**
  * Generates a new AES-256-GCM encryption key using Web Crypto API
- * @returns Promise with the generated CryptoKey
+ * @returns Promise with the generated JsonWebKey
  */
-export async function generateEncryptionKey(): Promise<CryptoKey> {
+export async function generateEncryptionKey(): Promise<JsonWebKey> {
   try {
     debugLog("Generating encryption key", "AES-256-GCM");
 
-    const key = await window.crypto.subtle.generateKey(
+    const key = await globalThis.crypto.subtle.generateKey(
       {
         name: "AES-GCM",
         length: 256,
@@ -217,13 +217,37 @@ export async function generateEncryptionKey(): Promise<CryptoKey> {
       ["encrypt", "decrypt"]
     );
 
+    const exportedKey = await globalThis.crypto.subtle.exportKey("jwk", key);
     debugLog("Key generated successfully", "AES-256-GCM");
-    return key;
+    return exportedKey;
   } catch (error) {
     debugLog(
       "Key generation error",
       error instanceof Error ? error.message : "Unknown error"
     );
     throw error;
+  }
+}
+
+/**
+ * Retrieves the stored encryption key from local storage
+ * @returns Promise with the stored JsonWebKey or null if not found
+ */
+export async function getEncryptionKey(): Promise<JsonWebKey | null> {
+  try {
+    const stored = await chrome.storage.local.get([AUTH_STORAGE_KEY]);
+    const auth = stored[AUTH_STORAGE_KEY];
+    if (auth?.encryptionKey) {
+      return auth.encryptionKey;
+    }
+
+    debugLog("No encryption key found", "in storage");
+    return null;
+  } catch (error) {
+    debugLog(
+      "Error retrieving encryption key",
+      error instanceof Error ? error.message : "Unknown error"
+    );
+    return null;
   }
 }
