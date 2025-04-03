@@ -19,6 +19,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "cbor-x": "^1.6.0",
     "qrcode": "^1.5.4",
     "tall": "^8.0.0"
   }
