@@ -88,6 +88,35 @@ try {
           window.postMessage({ type: 'AUTH_TOKEN_RESPONSE', token: null }, '*');
         }
       });
+    } else if (event.data.type === 'GET_ENCRYPTION_KEY') {
+      // Check if extension context is still valid
+      if (!chrome.runtime?.id) {
+        console.error('[Lucid] Extension context invalid - extension may have been reloaded or disabled');
+        window.postMessage({ 
+          type: 'ENCRYPTION_KEY_RESPONSE', 
+          encryptionKey: null,
+          error: 'Extension context invalid - please refresh the page'
+        }, '*');
+        return;
+      }
+
+      // Get the encryption key from storage
+      chrome.storage.local.get(['lucid_auth'], (result) => {
+        const encryptionKey = result.lucid_auth?.encryptionKey;
+        if (encryptionKey) {
+          window.postMessage({ 
+            type: 'ENCRYPTION_KEY_RESPONSE', 
+            encryptionKey 
+          }, '*');
+        } else {
+          console.error('[Lucid] No encryption key found in storage');
+          window.postMessage({ 
+            type: 'ENCRYPTION_KEY_RESPONSE', 
+            encryptionKey: null,
+            error: 'No encryption key found'
+          }, '*');
+        }
+      });
     }
   });
 } catch (e) {

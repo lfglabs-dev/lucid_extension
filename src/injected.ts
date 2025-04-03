@@ -107,53 +107,32 @@ interface EIP712SafeTx {
         return;
       }
 
-      const requiredFields: (keyof EIP712SafeTx)[] = [
-        "from",
-        "to",
-        "value",
-        "data",
-        "operation",
-        "safeTxGas",
-        "baseGas",
-        "gasPrice",
-        "gasToken",
-        "refundReceiver",
-        "nonce",
-      ];
+      // Get the encryption key through window.postMessage
+      const encryptionKeyData = await new Promise<{ encryptionKey: JsonWebKey }>((resolve, reject) => {
+        const messageHandler = (event: MessageEvent) => {
+          if (event.data.type === "ENCRYPTION_KEY_RESPONSE") {
+            window.removeEventListener("message", messageHandler);
+            if (event.data.error) {
+              console.error("[Lucid] Encryption key error:", event.data.error);
+              reject(new Error(event.data.error));
+            } else if (event.data.encryptionKey) {
+              resolve({ encryptionKey: event.data.encryptionKey });
+            } else {
+              reject(new Error("No encryption key available"));
+            }
+          }
+        };
+        window.addEventListener("message", messageHandler);
+        window.postMessage({ type: "GET_ENCRYPTION_KEY" }, "*");
+      });
 
-      for (const field of requiredFields) {
-        if (content[field] === undefined) {
-          throw new Error(
-            `The field ${field} in the transaction content is undefined`
-          );
-        }
-      }
-
-      const requestContent: EIP712SafeTx = {
-        chainId: content.chainId,
-        safeAddress: content.safeAddress,
-        from: content.from,
-        to: content.to,
-        value: content.value,
-        data: content.data,
-        operation: content.operation,
-        safeTxGas: content.safeTxGas,
-        baseGas: content.baseGas,
-        gasPrice: content.gasPrice,
-        gasToken: content.gasToken,
-        refundReceiver: content.refundReceiver,
-        nonce: content.nonce,
-      };
-
-      const stored = await chrome.storage.local.get([AUTH_STORAGE_KEY]);
-      const auth = stored[AUTH_STORAGE_KEY];
-      const jwk: JsonWebKey = auth.encryptionKey;
-      if (!jwk) {
+      if (!encryptionKeyData.encryptionKey) {
         throw new Error("No encryption key available");
       }
+
       const encryptionKey: CryptoKey = await globalThis.crypto.subtle.importKey(
         "jwk",
-        jwk,
+        encryptionKeyData.encryptionKey,
         { name: "AES-GCM" },
         true,
         ["encrypt", "decrypt"]
@@ -161,7 +140,7 @@ interface EIP712SafeTx {
 
       // Encrypt the transaction content
       const encryptedContent = await encryptTransaction(
-        requestContent,
+        content,
         encryptionKey
       );
 
