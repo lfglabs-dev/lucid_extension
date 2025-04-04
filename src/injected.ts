@@ -5,7 +5,6 @@ import {
   WindowWithEthereum,
 } from "./types";
 import { LUCID_API_URL } from "./config";
-import { AUTH_STORAGE_KEY } from "./services/auth";
 import { encode } from "cbor-x";
 
 /**
@@ -38,9 +37,9 @@ interface EIP712SafeTx {
   let lastRequestKey: string | null = null;
 
   /**
-   * Encrypts transaction data using AES-256-GCM
+   * Encrypts transaction data using AES-256-CTR
    * @param transaction - The transaction data to encrypt
-   * @param encryptionKey - The AES-256-GCM key to use for encryption
+   * @param encryptionKey - The AES-256-CTR key to use for encryption
    * @returns Base64 encoded string with IV and encrypted data
    */
   async function encryptTransaction(
@@ -48,8 +47,8 @@ interface EIP712SafeTx {
     encryptionKey: CryptoKey
   ): Promise<string> {
     try {
-      // Generate a random IV
-      const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+      // Generate a random IV (16 bytes for CTR mode)
+      const iv = globalThis.crypto.getRandomValues(new Uint8Array(16));
 
       // Encode the transaction data using CBOR
       const encodedData = encode(transaction);
@@ -57,8 +56,9 @@ interface EIP712SafeTx {
       // Encrypt the data
       const encryptedData = await globalThis.crypto.subtle.encrypt(
         {
-          name: "AES-GCM",
-          iv: iv,
+          name: "AES-CTR",
+          counter: iv,
+          length: 128, // Counter length in bits
         },
         encryptionKey,
         encodedData
@@ -70,7 +70,9 @@ interface EIP712SafeTx {
       result.set(new Uint8Array(encryptedData), iv.length);
 
       // Convert to base64 for transmission
-      return btoa(String.fromCharCode.apply(null, Array.from(result)));
+      const base64Result = btoa(String.fromCharCode.apply(null, Array.from(result)));
+      
+      return base64Result;
     } catch (error) {
       console.error("[Lucid] Encryption error:", error);
       throw new Error("Failed to encrypt transaction data");
@@ -133,7 +135,7 @@ interface EIP712SafeTx {
       const encryptionKey: CryptoKey = await globalThis.crypto.subtle.importKey(
         "jwk",
         encryptionKeyData.encryptionKey,
-        { name: "AES-GCM" },
+        { name: "AES-CTR" },
         true,
         ["encrypt", "decrypt"]
       );
