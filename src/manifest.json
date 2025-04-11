@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Lucid Safe",
+  "name": "Lucid",
   "version": "1.0.0",
-  "description": "Lucid Safe: Clear Signing for Safe Wallets",
+  "description": "Lucid: Clear Signing for crypto wallets",
   "icons": {
     "16": "icons/lucid16.png", 
     "48": "icons/lucid48.png",
@@ -95,10 +95,6 @@
     }
   ],
   "permissions": [
-    "scripting",
-    "storage"
-  ],
-  "host_permissions": [
-    "http://0.0.0.0:8080/*"
+    "storage"  
   ]
 }
