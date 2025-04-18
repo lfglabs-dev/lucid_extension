@@ -166,6 +166,10 @@ interface EoaTx {
       const requestBody = {
         request_type: requestType,
         content: encryptedContent,
+        notification: {
+          title: "Trying to sign a transaction?",
+          message: "A new transaction was detected from your laptop, verify it on Lucid !",
+        },
       };
 
       console.log("[Lucid] Sending transaction to server:", {
