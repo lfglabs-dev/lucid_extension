@@ -8,6 +8,8 @@ import {
 import { LUCID_API_URL } from "./config";
 import { encode } from "cbor-x";
 import { BrowserProvider } from "ethers";
+import { WordArray } from 'crypto-es/lib/core'
+import CryptoES from 'crypto-es'
 
 /**
  * Type for EIP-712 transaction data
@@ -56,41 +58,48 @@ interface EoaTx {
   /**
    * Encrypts transaction data using AES-256-CTR
    * @param transaction - The transaction data to encrypt
-   * @param encryptionKey - The AES-256-CTR key to use for encryption
+   * @param encryptionKey - The JWK object containing the encryption key
    * @returns Base64 encoded string with IV and encrypted data
    */
   async function encryptTransaction(
     transaction: EIP712SafeTx | EoaTx,
-    encryptionKey: CryptoKey
+    encryptionKey: { k: string, alg: string }
   ): Promise<string> {
     try {
+      if (!encryptionKey || !encryptionKey.k || typeof encryptionKey.k !== 'string') {
+        throw new Error('Invalid encryption key format - missing k property');
+      }
+
       // Generate a random IV (16 bytes for CTR mode)
-      const iv = globalThis.crypto.getRandomValues(new Uint8Array(16));
+      const iv = CryptoES.lib.WordArray.random(16) as WordArray;
 
       // Encode the transaction data using CBOR
       const encodedData = encode(transaction);
 
+      // Convert the CBOR ArrayBuffer to WordArray for CryptoES
+      const dataWords = CryptoES.lib.WordArray.create(new Uint8Array(encodedData));
+
+      // Get the key as WordArray from the JWK's k property
+      const key = CryptoES.enc.Base64.parse(encryptionKey.k);
+
       // Encrypt the data
-      const encryptedData = await globalThis.crypto.subtle.encrypt(
-        {
-          name: "AES-CTR",
-          counter: iv,
-          length: 128, // Counter length in bits
-        },
-        encryptionKey,
-        encodedData
-      );
+      const encrypted = CryptoES.AES.encrypt(dataWords, key, {
+        mode: CryptoES.mode.CTR,
+        padding: CryptoES.pad.NoPadding,
+        iv
+      });
+
+      // Get the ciphertext as WordArray
+      const ciphertext = encrypted.ciphertext;
 
       // Combine IV and encrypted data
-      const result = new Uint8Array(iv.length + encryptedData.byteLength);
-      result.set(iv, 0);
-      result.set(new Uint8Array(encryptedData), iv.length);
+      const combined = CryptoES.lib.WordArray.create();
+      combined.concat(iv);
+      combined.concat(ciphertext as WordArray);
 
       // Convert to base64 for transmission
-      const base64Result = btoa(String.fromCharCode.apply(null, Array.from(result)));
-      
-      return base64Result;
-    } catch (error) {
+      return CryptoES.enc.Base64.stringify(combined);
+    } catch (error: any) {
       console.error("[Lucid] Encryption error:", error);
       throw new Error("Failed to encrypt transaction data");
     }
@@ -127,7 +136,7 @@ interface EoaTx {
       }
 
       // Get the encryption key through window.postMessage
-      const encryptionKeyData = await new Promise<{ encryptionKey: JsonWebKey }>((resolve, reject) => {
+      const encryptionKeyData = await new Promise<{ encryptionKey: { k: string, alg: string } }>((resolve, reject) => {
         const messageHandler = (event: MessageEvent) => {
           if (event.data.type === "ENCRYPTION_KEY_RESPONSE") {
             window.removeEventListener("message", messageHandler);
@@ -149,18 +158,10 @@ interface EoaTx {
         throw new Error("No encryption key available");
       }
 
-      const encryptionKey: CryptoKey = await globalThis.crypto.subtle.importKey(
-        "jwk",
-        encryptionKeyData.encryptionKey,
-        { name: "AES-CTR" },
-        true,
-        ["encrypt", "decrypt"]
-      );
-
-      // Encrypt the transaction content
+      // Encrypt the transaction content using the base64 key directly
       const encryptedContent = await encryptTransaction(
         content,
-        encryptionKey
+        encryptionKeyData.encryptionKey
       );
 
       const requestBody = {
@@ -174,7 +175,6 @@ interface EoaTx {
 
       console.log("[Lucid] Sending transaction to server:", {
         url: `${LUCID_API_URL}/request`,
-        body: requestBody,
       });
 
       const serverResponse = await fetch(`${LUCID_API_URL}/request`, {
@@ -194,7 +194,7 @@ interface EoaTx {
       }
 
       const data = await serverResponse.json();
-      console.log("[Lucid] Server response:", data);
+      console.log("[Lucid] Server response received");
     } catch (error) {
       console.error("[Lucid] Error sending transaction:", error);
     }

@@ -11,6 +11,9 @@ importers:
       cbor-x:
         specifier: ^1.6.0
         version: 1.6.0
+      crypto-es:
+        specifier: ^2.1.0
+        version: 2.1.0
       ethers:
         specifier: ^6.13.5
         version: 6.13.5
@@ -20,6 +23,9 @@ importers:
       tall:
         specifier: ^8.0.0
         version: 8.0.0
+      typescript:
+        specifier: ^5
+        version: 5.8.3
     devDependencies:
       '@types/bun':
         specifier: latest
@@ -135,6 +141,9 @@ packages:
   color-name@1.1.4:
     resolution: {integrity: sha512-dOy+3AuW3a2wNbZHIuMZpTcgjGuLU/uBL/ubcZF9OXbDo8ff4O8yVp5Bf0efS8uEoYo5q4Fx7dY9OgQGXgAsQA==}
 
+  crypto-es@2.1.0:
+    resolution: {integrity: sha512-C5Dbuv4QTPGuloy5c5Vv/FZHtmK+lobLAypFfuRaBbwCsk3qbCWWESCH3MUcBsrgXloRNMrzwUAiPg4U6+IaKA==}
+
   decamelize@1.2.0:
     resolution: {integrity: sha512-z2S+W9X73hAUUki+N+9Za2lBlun89zigOyGrsax+KUQ6wKW4ZoWpEYBkGhQjwAjjDCkWxhY0VKEhk8wzY7F5cA==}
     engines: {node: '>=0.10.0'}
@@ -222,6 +231,11 @@ packages:
 
   tslib@2.7.0:
     resolution: {integrity: sha512-gLXCKdN1/j47AiHiOkJN69hJmcbGTHI0ImLmbYLHykhgeN0jVGola9yVjFgzCUklsZQMW55o+dW7IXv3RCXDzA==}
+
+  typescript@5.8.3:
+    resolution: {integrity: sha512-p1diW6TqL9L07nNxvRMM7hMMw4c5XOo/1ibL4aAIGmSAt9slTE1Xgw5KWuof2uTOvCg9BY7ZRi+GaF+7sfgPeQ==}
+    engines: {node: '>=14.17'}
+    hasBin: true
 
   undici-types@6.19.8:
     resolution: {integrity: sha512-ve2KP6f/JnbPBFyobGHuerC9g1FYGn/F8n1LWTwNxCEzd6IfqTwUQcNXgEtmmQ6DlRrC1hrSrBnCZPokRrDHjw==}
@@ -363,6 +377,8 @@ snapshots:
 
   color-name@1.1.4: {}
 
+  crypto-es@2.1.0: {}
+
   decamelize@1.2.0: {}
 
   detect-libc@2.0.3:
@@ -442,6 +458,8 @@ snapshots:
   tall@8.0.0: {}
 
   tslib@2.7.0: {}
+
+  typescript@5.8.3: {}
 
   undici-types@6.19.8: {}
 
