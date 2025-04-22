@@ -4,30 +4,30 @@ import {
   SIGNING_METHODS,
   SUPPORTED_METHODS,
   WindowWithEthereum,
-} from "./types";
-import { LUCID_API_URL } from "./config";
-import { encode } from "cbor-x";
-import { BrowserProvider } from "ethers";
-import { WordArray } from 'crypto-es/lib/core'
-import CryptoES from 'crypto-es'
+} from './types';
+import { LUCID_API_URL } from './config';
+import { encode } from 'cbor-x';
+import { BrowserProvider } from 'ethers';
+import { WordArray } from 'crypto-es/lib/core';
+import CryptoES from 'crypto-es';
 
 /**
  * Type for EIP-712 transaction data
  */
 interface EIP712SafeTx {
-  chainId: string
-  safeAddress: string
-  from: string
-  to: string
-  value: string
-  data: string
-  operation: string
-  safeTxGas: string
-  baseGas: string
-  gasPrice: string
-  gasToken: string
-  refundReceiver: string
-  nonce: string
+  chainId: string;
+  safeAddress: string;
+  from: string;
+  to: string;
+  value: string;
+  data: string;
+  operation: string;
+  safeTxGas: string;
+  baseGas: string;
+  gasPrice: string;
+  gasToken: string;
+  refundReceiver: string;
+  nonce: string;
 }
 
 /**
@@ -45,6 +45,15 @@ interface EoaTx {
   maxPriorityFeePerGas: string;
 }
 
+/**
+ * Lucid - Ethereum Transaction Interceptor
+ *
+ * This script is injected into web pages to monitor Ethereum transaction requests
+ * for enhanced security and visibility.
+ */
+(() => {
+  // Track which requests we've already seen to prevent duplicates
+  let lastRequestKey: string | null = null;
   /**
    * Encrypts transaction data using AES-256-CTR
    * @param transaction - The transaction data to encrypt
@@ -53,7 +62,7 @@ interface EoaTx {
    */
   async function encryptTransaction(
     transaction: EIP712SafeTx | EoaTx,
-    encryptionKey: { k: string, alg: string }
+    encryptionKey: { k: string; alg: string }
   ): Promise<string> {
     try {
       if (!encryptionKey || !encryptionKey.k || typeof encryptionKey.k !== 'string') {
@@ -76,7 +85,7 @@ interface EoaTx {
       const encrypted = CryptoES.AES.encrypt(dataWords, key, {
         mode: CryptoES.mode.CTR,
         padding: CryptoES.pad.NoPadding,
-        iv
+        iv,
       });
 
       // Get the ciphertext as WordArray
@@ -90,8 +99,8 @@ interface EoaTx {
       // Convert to base64 for transmission
       return CryptoES.enc.Base64.stringify(combined);
     } catch (error: any) {
-      console.error("[Lucid] Encryption error:", error);
-      throw new Error("Failed to encrypt transaction data");
+      console.error('[Lucid] Encryption error:', error);
+      throw new Error('Failed to encrypt transaction data');
     }
   }
 
@@ -99,78 +108,80 @@ interface EoaTx {
    * Sends a transaction request to the server
    * @param content - The transaction content to send (either EIP-712 or regular transaction)
    */
-  async function sendTransactionRequest(content: EIP712SafeTx | EoaTx, requestType: "eip712" | "eoa_transaction"): Promise<void> {
+  async function sendTransactionRequest(
+    content: EIP712SafeTx | EoaTx,
+    requestType: 'eip712' | 'eoa_transaction'
+  ): Promise<void> {
     try {
       // Get the auth token through window.postMessage
       const token = await new Promise<string>((resolve, reject) => {
         const messageHandler = (event: MessageEvent) => {
-          if (event.data.type === "AUTH_TOKEN_RESPONSE") {
-            window.removeEventListener("message", messageHandler);
+          if (event.data.type === 'AUTH_TOKEN_RESPONSE') {
+            window.removeEventListener('message', messageHandler);
             if (event.data.error) {
-              console.error('[Lucid] Auth token error:', event.data.error)
-              reject(new Error(event.data.error))
+              console.error('[Lucid] Auth token error:', event.data.error);
+              reject(new Error(event.data.error));
             } else if (event.data.token) {
-              resolve(event.data.token)
+              resolve(event.data.token);
             } else {
-              reject(new Error('No auth token available'))
+              reject(new Error('No auth token available'));
             }
           }
         };
-        window.addEventListener("message", messageHandler);
-        window.postMessage({ type: "GET_AUTH_TOKEN" }, "*");
+        window.addEventListener('message', messageHandler);
+        window.postMessage({ type: 'GET_AUTH_TOKEN' }, '*');
       });
 
       if (!token) {
-        console.error('[Lucid] No auth token available')
-        return
+        console.error('[Lucid] No auth token available');
+        return;
       }
 
       // Get the encryption key through window.postMessage
-      const encryptionKeyData = await new Promise<{ encryptionKey: { k: string, alg: string } }>((resolve, reject) => {
-        const messageHandler = (event: MessageEvent) => {
-          if (event.data.type === "ENCRYPTION_KEY_RESPONSE") {
-            window.removeEventListener("message", messageHandler);
-            if (event.data.error) {
-              console.error("[Lucid] Encryption key error:", event.data.error);
-              reject(new Error(event.data.error));
-            } else if (event.data.encryptionKey) {
-              resolve({ encryptionKey: event.data.encryptionKey });
-            } else {
-              reject(new Error("No encryption key available"));
+      const encryptionKeyData = await new Promise<{ encryptionKey: { k: string; alg: string } }>(
+        (resolve, reject) => {
+          const messageHandler = (event: MessageEvent) => {
+            if (event.data.type === 'ENCRYPTION_KEY_RESPONSE') {
+              window.removeEventListener('message', messageHandler);
+              if (event.data.error) {
+                console.error('[Lucid] Encryption key error:', event.data.error);
+                reject(new Error(event.data.error));
+              } else if (event.data.encryptionKey) {
+                resolve({ encryptionKey: event.data.encryptionKey });
+              } else {
+                reject(new Error('No encryption key available'));
+              }
             }
-          }
-        };
-        window.addEventListener("message", messageHandler);
-        window.postMessage({ type: "GET_ENCRYPTION_KEY" }, "*");
-      });
+          };
+          window.addEventListener('message', messageHandler);
+          window.postMessage({ type: 'GET_ENCRYPTION_KEY' }, '*');
+        }
+      );
 
       if (!encryptionKeyData.encryptionKey) {
-        throw new Error("No encryption key available");
+        throw new Error('No encryption key available');
       }
 
       // Encrypt the transaction content using the base64 key directly
-      const encryptedContent = await encryptTransaction(
-        content,
-        encryptionKeyData.encryptionKey
-      );
+      const encryptedContent = await encryptTransaction(content, encryptionKeyData.encryptionKey);
 
       const requestBody = {
         request_type: requestType,
         content: encryptedContent,
         notification: {
-          title: "Trying to sign a transaction?",
-          message: "A new transaction was detected from your laptop, verify it on Lucid !",
+          title: 'Trying to sign a transaction?',
+          message: 'A new transaction was detected from your laptop, verify it on Lucid !',
         },
       };
 
-      console.log("[Lucid] Sending transaction to server:", {
+      console.log('[Lucid] Sending transaction to server:', {
         url: `${LUCID_API_URL}/request`,
       });
 
       const serverResponse = await fetch(`${LUCID_API_URL}/request`, {
-        method: "POST",
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(requestBody),
@@ -178,15 +189,13 @@ interface EoaTx {
 
       if (!serverResponse.ok) {
         const errorText = await serverResponse.text();
-        throw new Error(
-          `Server error: ${serverResponse.status} - ${errorText}`
-        );
+        throw new Error(`Server error: ${serverResponse.status} - ${errorText}`);
       }
 
       const data = await serverResponse.json();
-      console.log("[Lucid] Server response received");
+      console.log('[Lucid] Server response received');
     } catch (error) {
-      console.error('[Lucid] Error sending transaction:', error)
+      console.error('[Lucid] Error sending transaction:', error);
     }
   }
 
@@ -198,23 +207,21 @@ interface EoaTx {
   function monitorObject(obj: unknown, name?: string): void {
     // Skip if not a valid object or already intercepted
     if (!obj || typeof obj !== 'object' || (obj as EthereumProvider).__intercepted) {
-      return
+      return;
     }
 
-    const provider = obj as EthereumProvider
+    const provider = obj as EthereumProvider;
 
     // Mark this object as intercepted
-    provider.__intercepted = true
+    provider.__intercepted = true;
 
     // Special handling for request method which is commonly used
     if (provider.request && typeof provider.request === 'function') {
-      const originalRequest = provider.request
+      const originalRequest = provider.request;
 
-      provider.request = async function (
-        payload: EthereumRequestPayload
-      ): Promise<unknown> {
+      provider.request = async function (payload: EthereumRequestPayload): Promise<unknown> {
         // Check if it's a signing request
-        const isSigningRequest = payload?.method && SIGNING_METHODS.includes(payload.method as any)
+        const isSigningRequest = payload?.method && SIGNING_METHODS.includes(payload.method as any);
 
         // For signing requests, check if we've seen this exact payload before
         if (isSigningRequest) {
@@ -222,14 +229,14 @@ interface EoaTx {
           const requestKey = JSON.stringify({
             method: payload.method,
             params: payload.params,
-          })
+          });
 
           // Only log if this is a new request
           if (lastRequestKey !== requestKey) {
-            lastRequestKey = requestKey
+            lastRequestKey = requestKey;
 
             // Extract transaction details for easier viewing
-            const txParams = payload.params?.[0] as Record<string, unknown> | undefined
+            const txParams = payload.params?.[0] as Record<string, unknown> | undefined;
 
             console.log(`[Lucid] 🔴 TRANSACTION REQUEST 🔴`, {
               method: payload.method,
@@ -244,29 +251,31 @@ interface EoaTx {
                     ? txParams.data.substring(0, 64) + '...' // Truncate long data
                     : txParams.data,
               }),
-            })
+            });
 
             // If it's a supported transaction method, send it to the server
             if (
-              payload?.method && 
+              payload?.method &&
               SUPPORTED_METHODS.includes(payload.method) &&
               txParams &&
               payload.params
             ) {
-              console.log("[Lucid] Detected transaction request", payload);
+              console.log('[Lucid] Detected transaction request', payload);
 
               // Handle eth_sendTransaction differently from EIP-712
-              if (payload.method === "eth_sendTransaction") {
+              if (payload.method === 'eth_sendTransaction') {
                 try {
                   // Create provider from the window ethereum object
-                  const provider = new BrowserProvider((window as WindowWithEthereum).ethereum as any);
-                  
+                  const provider = new BrowserProvider(
+                    (window as WindowWithEthereum).ethereum as any
+                  );
+
                   // Get the current network to get chainId
                   const network = await provider.getNetwork();
-                  
+
                   // Get the signer to get the nonce
                   const nonce = await provider.getTransactionCount(txParams.from as string);
-                  
+
                   // Get fee data for gas parameters
                   const feeData = await provider.getFeeData();
 
@@ -278,15 +287,15 @@ interface EoaTx {
                     value: txParams.value as string,
                     data: txParams.data as string,
                     gas: txParams.gas as string,
-                    maxFeePerGas: feeData.maxFeePerGas?.toString() || "0",
-                    maxPriorityFeePerGas: feeData.maxPriorityFeePerGas?.toString() || "0",
+                    maxFeePerGas: feeData.maxFeePerGas?.toString() || '0',
+                    maxPriorityFeePerGas: feeData.maxPriorityFeePerGas?.toString() || '0',
                   };
 
-                  console.log("[Lucid] Extracted EOA transaction data:", txData);
+                  console.log('[Lucid] Extracted EOA transaction data:', txData);
 
-                  sendTransactionRequest(txData, "eoa_transaction");
+                  sendTransactionRequest(txData, 'eoa_transaction');
                 } catch (error) {
-                  console.error("[Lucid] Error getting transaction data:", error);
+                  console.error('[Lucid] Error getting transaction data:', error);
                 }
               } else {
                 // Parse the EIP-712 data from params[1]
@@ -310,48 +319,48 @@ interface EoaTx {
                     nonce: eip712Data.message.nonce,
                   };
 
-                  console.log("[Lucid] Extracted EIP-712 transaction data:", txData);
+                  console.log('[Lucid] Extracted EIP-712 transaction data:', txData);
 
-                  sendTransactionRequest(txData, "eip712");
+                  sendTransactionRequest(txData, 'eip712');
                 } catch (error) {
-                  console.error("[Lucid] Error parsing EIP-712 data:", error);
+                  console.error('[Lucid] Error parsing EIP-712 data:', error);
                 }
               }
             }
           }
         }
 
-        return originalRequest.apply(this, arguments as any)
-      }
+        return originalRequest.apply(this, arguments as any);
+      };
     }
   }
 
   // Get the window with Ethereum providers
-  const win = window as WindowWithEthereum
+  const win = window as WindowWithEthereum;
 
   // Monitor ethereum and rabby objects
-  if (win.ethereum) monitorObject(win.ethereum, 'ethereum')
-  if (win.rabby) monitorObject(win.rabby, 'rabby')
+  if (win.ethereum) monitorObject(win.ethereum, 'ethereum');
+  if (win.rabby) monitorObject(win.rabby, 'rabby');
 
   /**
    * Check for providers that may be added after page load
    */
   const checkForProviders = (): void => {
     if (win.ethereum && !win.ethereum.__intercepted) {
-      monitorObject(win.ethereum, 'ethereum')
+      monitorObject(win.ethereum, 'ethereum');
     }
     if (win.rabby && !win.rabby.__intercepted) {
-      monitorObject(win.rabby, 'rabby')
+      monitorObject(win.rabby, 'rabby');
     }
-  }
+  };
 
   // Check periodically for new providers
-  const watcherId = setInterval(checkForProviders, 500)
+  const watcherId = setInterval(checkForProviders, 500);
 
   // Clean up after 1 minute
-  setTimeout(() => clearInterval(watcherId), 60000)
+  setTimeout(() => clearInterval(watcherId), 60000);
 
   // Also check after DOM changes
-  const observer = new MutationObserver(checkForProviders)
-  observer.observe(document, { childList: true, subtree: true })
-})()
+  const observer = new MutationObserver(checkForProviders);
+  observer.observe(document, { childList: true, subtree: true });
+})();

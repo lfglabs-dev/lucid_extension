@@ -11,7 +11,7 @@ try {
   script.src = chrome.runtime.getURL('injected.js');
   script.dataset.extension = 'lucid';
 
-   /**
+  /**
    * Injects the script into the page
    */
   const injectScript = (): void => {
@@ -25,7 +25,7 @@ try {
     }
     // Last resort - wait for DOMContentLoaded
     else {
-      document.addEventListener("DOMContentLoaded", () => {
+      document.addEventListener('DOMContentLoaded', () => {
         document.head.insertBefore(script, document.head.firstChild);
       });
     }
@@ -53,28 +53,36 @@ try {
   });
 
   // Handle messages from the injected script
-  window.addEventListener('message', (event) => {
+  window.addEventListener('message', event => {
     if (event.data.type === 'GET_AUTH_TOKEN') {
       // Check if extension context is still valid
       if (!chrome.runtime?.id) {
-        console.error('[Lucid] Extension context invalid - extension may have been reloaded or disabled');
-        window.postMessage({ 
-          type: 'AUTH_TOKEN_RESPONSE', 
-          token: null,
-          error: 'Extension context invalid - please refresh the page'
-        }, '*');
+        console.error(
+          '[Lucid] Extension context invalid - extension may have been reloaded or disabled'
+        );
+        window.postMessage(
+          {
+            type: 'AUTH_TOKEN_RESPONSE',
+            token: null,
+            error: 'Extension context invalid - please refresh the page',
+          },
+          '*'
+        );
         return;
       }
 
       // Forward the message to the background script
-      chrome.runtime.sendMessage({ type: 'GET_AUTH_TOKEN' }, (response) => {
+      chrome.runtime.sendMessage({ type: 'GET_AUTH_TOKEN' }, response => {
         if (chrome.runtime.lastError) {
           console.error('[Lucid] Error getting auth token:', chrome.runtime.lastError);
-          window.postMessage({ 
-            type: 'AUTH_TOKEN_RESPONSE', 
-            token: null,
-            error: chrome.runtime.lastError.message
-          }, '*');
+          window.postMessage(
+            {
+              type: 'AUTH_TOKEN_RESPONSE',
+              token: null,
+              error: chrome.runtime.lastError.message,
+            },
+            '*'
+          );
           return;
         }
 
