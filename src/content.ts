@@ -7,9 +7,9 @@
 
 try {
   // Create a script element that loads our injected.js
-  const script = document.createElement("script");
-  script.src = chrome.runtime.getURL("injected.js");
-  script.dataset.extension = "lucid";
+  const script = document.createElement('script');
+  script.src = chrome.runtime.getURL('injected.js');
+  script.dataset.extension = 'lucid';
 
   /**
    * Injects the script into the page
@@ -25,7 +25,7 @@ try {
     }
     // Last resort - wait for DOMContentLoaded
     else {
-      document.addEventListener("DOMContentLoaded", () => {
+      document.addEventListener('DOMContentLoaded', () => {
         document.head.insertBefore(script, document.head.firstChild);
       });
     }
@@ -37,10 +37,7 @@ try {
   // Also set up a MutationObserver as backup to ensure we inject as early as possible
   const observer = new MutationObserver((mutations, obs) => {
     // If head appears and our script isn't injected yet, inject it
-    if (
-      document.head &&
-      !document.querySelector('script[data-extension="lucid"]')
-    ) {
+    if (document.head && !document.querySelector('script[data-extension="lucid"]')) {
       document.head.insertBefore(
         script.cloneNode(true) as HTMLScriptElement,
         document.head.firstChild
@@ -56,28 +53,36 @@ try {
   });
 
   // Handle messages from the injected script
-  window.addEventListener('message', (event) => {
+  window.addEventListener('message', event => {
     if (event.data.type === 'GET_AUTH_TOKEN') {
       // Check if extension context is still valid
       if (!chrome.runtime?.id) {
-        console.error('[Lucid] Extension context invalid - extension may have been reloaded or disabled');
-        window.postMessage({ 
-          type: 'AUTH_TOKEN_RESPONSE', 
-          token: null,
-          error: 'Extension context invalid - please refresh the page'
-        }, '*');
+        console.error(
+          '[Lucid] Extension context invalid - extension may have been reloaded or disabled'
+        );
+        window.postMessage(
+          {
+            type: 'AUTH_TOKEN_RESPONSE',
+            token: null,
+            error: 'Extension context invalid - please refresh the page',
+          },
+          '*'
+        );
         return;
       }
 
       // Forward the message to the background script
-      chrome.runtime.sendMessage({ type: 'GET_AUTH_TOKEN' }, (response) => {
+      chrome.runtime.sendMessage({ type: 'GET_AUTH_TOKEN' }, response => {
         if (chrome.runtime.lastError) {
           console.error('[Lucid] Error getting auth token:', chrome.runtime.lastError);
-          window.postMessage({ 
-            type: 'AUTH_TOKEN_RESPONSE', 
-            token: null,
-            error: chrome.runtime.lastError.message
-          }, '*');
+          window.postMessage(
+            {
+              type: 'AUTH_TOKEN_RESPONSE',
+              token: null,
+              error: chrome.runtime.lastError.message,
+            },
+            '*'
+          );
           return;
         }
 
@@ -88,8 +93,100 @@ try {
           window.postMessage({ type: 'AUTH_TOKEN_RESPONSE', token: null }, '*');
         }
       });
+    } else if (event.data.type === 'GET_ENCRYPTION_KEY') {
+      // Check if extension context is still valid
+      if (!chrome.runtime?.id) {
+        console.error(
+          '[Lucid] Extension context invalid - extension may have been reloaded or disabled'
+        );
+        window.postMessage(
+          {
+            type: 'ENCRYPTION_KEY_RESPONSE',
+            jwk: null,
+            error: 'Extension context invalid - please refresh the page',
+          },
+          '*'
+        );
+        return;
+      }
+
+      // Forward the message to the background script
+      chrome.runtime.sendMessage({ type: 'GET_ENCRYPTION_KEY' }, response => {
+        if (chrome.runtime.lastError) {
+          console.error('[Lucid] Error getting encryption key:', chrome.runtime.lastError);
+          window.postMessage(
+            {
+              type: 'ENCRYPTION_KEY_RESPONSE',
+              jwk: null,
+              error: chrome.runtime.lastError.message,
+            },
+            '*'
+          );
+          return;
+        }
+
+        if (response?.jwk) {
+          window.postMessage({ type: 'ENCRYPTION_KEY_RESPONSE', jwk: response.jwk }, '*');
+        } else {
+          console.error('[Lucid] No encryption key received from background script');
+          window.postMessage({ type: 'ENCRYPTION_KEY_RESPONSE', jwk: null }, '*');
+        }
+      });
+    } else if (event.data.type === 'MAKE_API_REQUEST') {
+      console.log('[Lucid] Making API request:', event.data);
+      // Check if extension context is still valid
+      if (!chrome.runtime?.id) {
+        console.error(
+          '[Lucid] Extension context invalid - extension may have been reloaded or disabled'
+        );
+        window.postMessage(
+          {
+            type: 'API_REQUEST_RESPONSE',
+            response: null,
+            error: 'Extension context invalid - please refresh the page',
+          },
+          '*'
+        );
+        return;
+      }
+
+      // Extract request details from the event data
+      const { url, method, headers, body } = event.data;
+
+      // Forward the request to the background script
+      chrome.runtime.sendMessage(
+        {
+          type: 'MAKE_API_REQUEST',
+          url,
+          method,
+          headers,
+          body,
+        },
+        response => {
+          if (chrome.runtime.lastError) {
+            console.error('[Lucid] Error making API request:', chrome.runtime.lastError);
+            window.postMessage(
+              {
+                type: 'API_REQUEST_RESPONSE',
+                response: null,
+                error: chrome.runtime.lastError.message,
+              },
+              '*'
+            );
+            return;
+          }
+
+          window.postMessage(
+            {
+              type: 'API_REQUEST_RESPONSE',
+              response: response,
+            },
+            '*'
+          );
+        }
+      );
     }
   });
 } catch (e) {
-  console.error("[Lucid] Error:", e);
+  console.error('[Lucid] Error:', e);
 }
