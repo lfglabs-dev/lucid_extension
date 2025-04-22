@@ -64,4 +64,12 @@ export const SIGNING_METHODS = [
   "wallet_signTypedData",
 ] as const;
 
+/**
+ * List of transaction methods that are currently supported for monitoring
+ */
+export const SUPPORTED_METHODS: string[] = [
+  "eth_sendTransaction",
+  "eth_signTypedData_v4",
+] as const;
+
 export type SigningMethod = (typeof SIGNING_METHODS)[number];

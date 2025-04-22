@@ -201,16 +201,14 @@ export async function getLinkToken(): Promise<ApiResponse<string>> {
 }
 
 /**
- * Generates a new AES-256-GCM encryption key using Web Crypto API
+ * Generates a new AES-256-CTR encryption key using Web Crypto API
  * @returns Promise with the generated JsonWebKey
  */
 export async function generateEncryptionKey(): Promise<JsonWebKey> {
   try {
-    debugLog("Generating encryption key", "AES-256-GCM");
-
     const key = await globalThis.crypto.subtle.generateKey(
       {
-        name: "AES-GCM",
+        name: "AES-CTR",
         length: 256,
       },
       true, // extractable
@@ -218,7 +216,6 @@ export async function generateEncryptionKey(): Promise<JsonWebKey> {
     );
 
     const exportedKey = await globalThis.crypto.subtle.exportKey("jwk", key);
-    debugLog("Key generated successfully", "AES-256-GCM");
     return exportedKey;
   } catch (error) {
     debugLog(
