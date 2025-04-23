@@ -102,7 +102,7 @@ try {
         window.postMessage(
           {
             type: 'ENCRYPTION_KEY_RESPONSE',
-            jwk: null,
+            encryptionKey: null,
             error: 'Extension context invalid - please refresh the page',
           },
           '*'
@@ -117,7 +117,7 @@ try {
           window.postMessage(
             {
               type: 'ENCRYPTION_KEY_RESPONSE',
-              jwk: null,
+              encryptionKey: null,
               error: chrome.runtime.lastError.message,
             },
             '*'
@@ -126,14 +126,27 @@ try {
         }
 
         if (response?.jwk) {
-          window.postMessage({ type: 'ENCRYPTION_KEY_RESPONSE', jwk: response.jwk }, '*');
+          console.log('[Lucid] Got encryption key, sending to page:', response.jwk);
+          window.postMessage(
+            {
+              type: 'ENCRYPTION_KEY_RESPONSE',
+              encryptionKey: response.jwk,
+            },
+            '*'
+          );
         } else {
           console.error('[Lucid] No encryption key received from background script');
-          window.postMessage({ type: 'ENCRYPTION_KEY_RESPONSE', jwk: null }, '*');
+          window.postMessage(
+            {
+              type: 'ENCRYPTION_KEY_RESPONSE',
+              encryptionKey: null,
+            },
+            '*'
+          );
         }
       });
     } else if (event.data.type === 'MAKE_API_REQUEST') {
-      console.log('[Lucid] Making API request:', event.data);
+      console.log('[Lucid] Received API request from page:', event.data.url);
       // Check if extension context is still valid
       if (!chrome.runtime?.id) {
         console.error(
@@ -154,37 +167,68 @@ try {
       const { url, method, headers, body } = event.data;
 
       // Forward the request to the background script
-      chrome.runtime.sendMessage(
-        {
-          type: 'MAKE_API_REQUEST',
-          url,
-          method,
-          headers,
-          body,
-        },
-        response => {
-          if (chrome.runtime.lastError) {
-            console.error('[Lucid] Error making API request:', chrome.runtime.lastError);
+      try {
+        chrome.runtime.sendMessage(
+          {
+            type: 'MAKE_API_REQUEST',
+            url,
+            method,
+            headers,
+            body,
+          },
+          response => {
+            // Check for runtime errors
+            if (chrome.runtime.lastError) {
+              console.error('[Lucid] Error making API request:', chrome.runtime.lastError);
+              window.postMessage(
+                {
+                  type: 'API_REQUEST_RESPONSE',
+                  response: null,
+                  error: chrome.runtime.lastError.message,
+                },
+                '*'
+              );
+              return;
+            }
+
+            // Handle responses with errors
+            if (response?.error) {
+              console.error('[Lucid] API request failed with error:', response.error);
+              window.postMessage(
+                {
+                  type: 'API_REQUEST_RESPONSE',
+                  response: response,
+                  error: response.error,
+                },
+                '*'
+              );
+              return;
+            }
+
+            // Success case
+            console.log('[Lucid] API request successful, sending response to page');
             window.postMessage(
               {
                 type: 'API_REQUEST_RESPONSE',
-                response: null,
-                error: chrome.runtime.lastError.message,
+                response: response,
               },
               '*'
             );
-            return;
           }
-
-          window.postMessage(
-            {
-              type: 'API_REQUEST_RESPONSE',
-              response: response,
-            },
-            '*'
-          );
-        }
-      );
+        );
+      } catch (error) {
+        // Handle unexpected exceptions
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error('[Lucid] Exception making API request:', errorMessage);
+        window.postMessage(
+          {
+            type: 'API_REQUEST_RESPONSE',
+            response: null,
+            error: errorMessage,
+          },
+          '*'
+        );
+      }
     }
   });
 } catch (e) {

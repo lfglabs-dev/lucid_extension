@@ -140,27 +140,46 @@ interface EoaTx {
       // Get the encryption key through window.postMessage
       const encryptionKeyData = await new Promise<{ encryptionKey: { k: string; alg: string } }>(
         (resolve, reject) => {
+          console.log('[Lucid] Requesting encryption key...');
+
           const messageHandler = (event: MessageEvent) => {
+            console.log('[Lucid] Got message response:', event.data.type);
+
             if (event.data.type === 'ENCRYPTION_KEY_RESPONSE') {
               window.removeEventListener('message', messageHandler);
+              clearTimeout(timeoutId);
+
               if (event.data.error) {
                 console.error('[Lucid] Encryption key error:', event.data.error);
                 reject(new Error(event.data.error));
               } else if (event.data.encryptionKey) {
+                console.log('[Lucid] Received encryption key:', event.data.encryptionKey);
                 resolve({ encryptionKey: event.data.encryptionKey });
               } else {
+                console.error('[Lucid] No encryption key in response');
                 reject(new Error('No encryption key available'));
               }
             }
           };
+
+          // Set a timeout to reject the promise after 10 seconds
+          const timeoutId = setTimeout(() => {
+            window.removeEventListener('message', messageHandler);
+            console.error('[Lucid] Encryption key request timed out after 10 seconds');
+            reject(new Error('Encryption key request timed out'));
+          }, 10000);
+
           window.addEventListener('message', messageHandler);
           window.postMessage({ type: 'GET_ENCRYPTION_KEY' }, '*');
         }
       );
 
       if (!encryptionKeyData.encryptionKey) {
+        console.error('[Lucid] Encryption key is missing after promise resolved');
         throw new Error('No encryption key available');
       }
+
+      console.log('[Lucid] Successfully retrieved encryption key, preparing to encrypt');
 
       // Encrypt the transaction content using the base64 key directly
       const encryptedContent = await encryptTransaction(content, encryptionKeyData.encryptionKey);
@@ -178,22 +197,51 @@ interface EoaTx {
         url: `${LUCID_API_URL}/request`,
       });
 
-      const serverResponse = await fetch(`${LUCID_API_URL}/request`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(requestBody),
+      // Send through background script to bypass CSP restrictions
+      const response = await new Promise<any>((resolve, reject) => {
+        // Set up message handler for the response
+        const messageHandler = (event: MessageEvent) => {
+          if (event.data.type === 'API_REQUEST_RESPONSE') {
+            window.removeEventListener('message', messageHandler);
+            clearTimeout(timeoutId);
+
+            if (event.data.error) {
+              console.error('[Lucid] API request error:', event.data.error);
+              reject(new Error(event.data.error));
+            } else {
+              console.log('[Lucid] API request successful');
+              resolve(event.data.response);
+            }
+          }
+        };
+
+        // Set a timeout to avoid hanging if no response is received
+        const timeoutId = setTimeout(() => {
+          window.removeEventListener('message', messageHandler);
+          console.error('[Lucid] API request timed out after 30 seconds');
+          reject(new Error('API request timed out'));
+        }, 30000);
+
+        // Listen for the response
+        window.addEventListener('message', messageHandler);
+
+        // Send the request to the content script
+        window.postMessage(
+          {
+            type: 'MAKE_API_REQUEST',
+            url: `${LUCID_API_URL}/request`,
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(requestBody),
+          },
+          '*'
+        );
       });
 
-      if (!serverResponse.ok) {
-        const errorText = await serverResponse.text();
-        throw new Error(`Server error: ${serverResponse.status} - ${errorText}`);
-      }
-
-      const data = await serverResponse.json();
-      console.log('[Lucid] Server response received');
+      console.log('[Lucid] Server response received:', response);
     } catch (error) {
       console.error('[Lucid] Error sending transaction:', error);
     }
