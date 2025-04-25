@@ -46,6 +46,14 @@ interface EoaTx {
 }
 
 /**
+ * Type for eth_signTypedData_v4
+ */
+interface SignedTypedData {
+  from: string;
+  message: string;
+}
+
+/**
  * Lucid - Ethereum Transaction Interceptor
  *
  * This script is injected into web pages to monitor Ethereum transaction requests
@@ -61,7 +69,7 @@ interface EoaTx {
    * @returns Base64 encoded string with IV and encrypted data
    */
   async function encryptTransaction(
-    transaction: EIP712SafeTx | EoaTx,
+    transaction: EIP712SafeTx | EoaTx | SignedTypedData,
     encryptionKey: { k: string; alg: string }
   ): Promise<string> {
     try {
@@ -72,11 +80,31 @@ interface EoaTx {
       // Generate a random IV (16 bytes for CTR mode)
       const iv = CryptoES.lib.WordArray.random(16) as WordArray;
 
+      // Convert transaction to a clean object (removing any methods or non-data properties)
+      const cleanTransaction = JSON.parse(JSON.stringify(transaction));
+      console.log('[Lucid] Clean transaction for encoding:', cleanTransaction);
+
       // Encode the transaction data using CBOR
-      const encodedData = encode(transaction);
+      let encodedData;
+      try {
+        const encodedRaw = encode(cleanTransaction);
+        console.log('[Lucid] Raw encoded result:', encodedRaw);
+        console.log('[Lucid] Is Uint8Array?', encodedRaw instanceof Uint8Array);
+        console.log('[Lucid] Type:', typeof encodedRaw);
+        encodedData = new Uint8Array(encodedRaw as any); // Ensures it's valid TypedArray
+        console.log('[Lucid] CBOR encoding successful, length:', encodedData.byteLength);
+      } catch (encodeError) {
+        console.error('[Lucid] CBOR encoding error:', encodeError);
+        throw new Error(
+          `CBOR encoding failed: ${
+            encodeError instanceof Error ? encodeError.message : String(encodeError)
+          }`
+        );
+      }
 
       // Convert the CBOR ArrayBuffer to WordArray for CryptoES
       const dataWords = CryptoES.lib.WordArray.create(new Uint8Array(encodedData));
+      console.log('[Lucid] Converted to WordArray for encryption');
 
       // Get the key as WordArray from the JWK's k property
       const key = CryptoES.enc.Base64.parse(encryptionKey.k);
@@ -97,10 +125,12 @@ interface EoaTx {
       combined.concat(ciphertext as WordArray);
 
       // Convert to base64 for transmission
-      return CryptoES.enc.Base64.stringify(combined);
+      const result = CryptoES.enc.Base64.stringify(combined);
+      console.log('[Lucid] Final base64 result length:', result.length);
+      return result;
     } catch (error: any) {
       console.error('[Lucid] Encryption error:', error);
-      throw new Error('Failed to encrypt transaction data');
+      throw new Error(`Failed to encrypt transaction data: ${error.message || String(error)}`);
     }
   }
 
@@ -109,8 +139,8 @@ interface EoaTx {
    * @param content - The transaction content to send (either EIP-712 or regular transaction)
    */
   async function sendTransactionRequest(
-    content: EIP712SafeTx | EoaTx,
-    requestType: 'eip712' | 'eoa_transaction'
+    content: EIP712SafeTx | EoaTx | SignedTypedData,
+    requestType: 'eip712' | 'eoa_transaction' | 'signed_typed_data'
   ): Promise<void> {
     try {
       // Get the auth token through window.postMessage
@@ -345,6 +375,14 @@ interface EoaTx {
                 } catch (error) {
                   console.error('[Lucid] Error getting transaction data:', error);
                 }
+              } else if (payload.method === 'eth_signTypedData_v4') {
+                console.log('[Lucid] eth_signTypedData_v4', payload);
+                const signedTypedData: SignedTypedData = {
+                  from: payload.params[0] as string,
+                  message: payload.params[1] as string,
+                };
+
+                sendTransactionRequest(signedTypedData, 'signed_typed_data');
               } else {
                 // Parse the EIP-712 data from params[1]
                 try {
