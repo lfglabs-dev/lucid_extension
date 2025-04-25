@@ -8,12 +8,14 @@
     "copy-manifest": "cp src/manifest.json dist/ && cp src/popup.html dist/ && cp -r src/icons dist/ && echo 'Copied manifest, popup.html, and icons to dist'",
     "dev": "bun run build",
     "clean": "rm -rf dist",
-    "watch": "bun build ./src/content.ts ./src/injected.ts ./src/popup.ts --outdir ./dist --watch"
-  },
+    "watch": "bun build ./src/content.ts ./src/injected.ts ./src/popup.ts --outdir ./dist --watch",
+    "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json}\""  
+    },
   "devDependencies": {
     "@types/bun": "latest",
     "@types/chrome": "^0.0.309",
-    "@types/qrcode": "^1.5.5"
+    "@types/qrcode": "^1.5.5",
+    "prettier": "^3.5.3"
   },
   "peerDependencies": {
     "typescript": "^5"

@@ -50,26 +50,23 @@ export interface WindowWithEthereum extends Window {
  * List of Ethereum signing methods to monitor
  */
 export const SIGNING_METHODS = [
-  "eth_signTransaction",
-  "eth_sendTransaction",
-  "eth_sign",
-  "personal_sign",
-  "eth_signTypedData",
-  "eth_signTypedData_v1",
-  "eth_signTypedData_v3",
-  "eth_signTypedData_v4",
-  "wallet_sendTransaction",
-  "wallet_signTransaction",
-  "wallet_sign",
-  "wallet_signTypedData",
+  'eth_signTransaction',
+  'eth_sendTransaction',
+  'eth_sign',
+  'personal_sign',
+  'eth_signTypedData',
+  'eth_signTypedData_v1',
+  'eth_signTypedData_v3',
+  'eth_signTypedData_v4',
+  'wallet_sendTransaction',
+  'wallet_signTransaction',
+  'wallet_sign',
+  'wallet_signTypedData',
 ] as const;
 
 /**
  * List of transaction methods that are currently supported for monitoring
  */
-export const SUPPORTED_METHODS: string[] = [
-  "eth_sendTransaction",
-  "eth_signTypedData_v4",
-] as const;
+export const SUPPORTED_METHODS: string[] = ['eth_sendTransaction', 'eth_signTypedData_v4'] as const;
 
 export type SigningMethod = (typeof SIGNING_METHODS)[number];

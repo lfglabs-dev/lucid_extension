@@ -1,14 +1,14 @@
-import QRCode from "qrcode";
-import { APP_LINK } from "./config";
-import { getEncryptionKey, getLinkToken } from "./services/auth";
+import QRCode from 'qrcode';
+import { APP_LINK } from './config';
+import { getEncryptionKey, getLinkToken } from './services/auth';
 
-document.addEventListener("DOMContentLoaded", async () => {
-  console.log("Popup script loaded");
+document.addEventListener('DOMContentLoaded', async () => {
+  console.log('Popup script loaded');
 
   try {
     const response = await getLinkToken();
     const linkToken = response.data; // Extract token from response
-    console.log("Link token received:", linkToken);
+    console.log('Link token received:', linkToken);
 
     const deepLink = `${APP_LINK}/--/connect?token=${linkToken}`;
     const tokenOnlyUrl = `token-${linkToken}`;
@@ -26,24 +26,24 @@ document.addEventListener("DOMContentLoaded", async () => {
       width: 200,
       margin: 2,
       color: {
-        dark: "#000000",
-        light: "#ffffff",
+        dark: '#000000',
+        light: '#ffffff',
       },
     });
-    console.log("QR code generated successfully");
+    console.log('QR code generated successfully');
 
-    const qrCodeElement = document.getElementById("qrcode");
+    const qrCodeElement = document.getElementById('qrcode');
     if (qrCodeElement) {
-      console.log("QR code element found");
-      const img = document.createElement("img");
+      console.log('QR code element found');
+      const img = document.createElement('img');
       img.src = qrCodeDataUrl;
-      img.alt = "QR Code for Lucid Mobile App Connection";
+      img.alt = 'QR Code for Lucid Mobile App Connection';
       qrCodeElement.appendChild(img);
-      console.log("QR code image added to DOM");
+      console.log('QR code image added to DOM');
     } else {
-      console.error("QR code element not found in DOM");
+      console.error('QR code element not found in DOM');
     }
   } catch (error) {
-    console.error("Error in popup script:", error);
+    console.error('Error in popup script:', error);
   }
 });
