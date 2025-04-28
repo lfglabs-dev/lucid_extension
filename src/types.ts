@@ -44,6 +44,8 @@ export interface EthereumProvider {
 export interface WindowWithEthereum extends Window {
   ethereum?: EthereumProvider;
   rabby?: EthereumProvider;
+  phantom?: EthereumProvider;
+  coinbaseWalletExtension?: EthereumProvider;
 }
 
 /**

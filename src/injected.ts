@@ -228,14 +228,6 @@ if ((window as any).__lucidInjected) {
         const originalRequest = provider.request;
 
         provider.request = async function (payload: EthereumRequestPayload): Promise<unknown> {
-          // Debug log for all requests
-          console.log('[Lucid] Intercepted request:', {
-            method: payload?.method,
-            provider: name || 'unknown',
-            params: payload?.params,
-            isSigningMethod: payload?.method && SIGNING_METHODS.includes(payload.method as any)
-          });
-
           // Check if it's a signing request
           const isSigningRequest =
             payload?.method && SIGNING_METHODS.includes(payload.method as any);
@@ -398,7 +390,8 @@ if ((window as any).__lucidInjected) {
     // Monitor ethereum and rabby objects
     if (win.ethereum) monitorObject(win.ethereum, 'ethereum');
     if (win.rabby) monitorObject(win.rabby, 'rabby');
-
+    if (win.phantom && win.phantom.ethereum) monitorObject(win.phantom.ethereum, 'phantom');
+    if (win.coinbaseWalletExtension) monitorObject(win.coinbaseWalletExtension, 'coinbase');
     /**
      * Check for providers that may be added after page load
      */
@@ -408,6 +401,14 @@ if ((window as any).__lucidInjected) {
       }
       if (win.rabby && !win.rabby.__intercepted) {
         monitorObject(win.rabby, 'rabby');
+      }
+      if (win.phantom && !win.phantom.__intercepted) {
+        monitorObject(win.phantom.ethereum, 'phantom');
+      }
+
+      if (win.coinbaseWalletExtension && !win.coinbaseWalletExtension.__intercepted) {
+        console.log('[Lucid] Detected Coinbase provider');
+        monitorObject(win.coinbaseWalletExtension, 'coinbase');
       }
     };
 
