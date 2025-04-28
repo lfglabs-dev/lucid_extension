@@ -157,22 +157,51 @@ if ((window as any).__lucidInjected) {
           url: `${LUCID_API_URL}/request`,
         });
 
-        const serverResponse = await fetch(`${LUCID_API_URL}/request`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
+        // Send through background script
+      const response = await new Promise<any>((resolve, reject) => {
+        // Set up message handler for the response
+        const messageHandler = (event: MessageEvent) => {
+          if (event.data.type === 'API_REQUEST_RESPONSE') {
+            window.removeEventListener('message', messageHandler);
+            clearTimeout(timeoutId);
+
+            if (event.data.error) {
+              console.error('[Lucid] API request error:', event.data.error);
+              reject(new Error(event.data.error));
+            } else {
+              console.log('[Lucid] API request successful');
+              resolve(event.data.response);
+            }
+          }
+        };
+
+        // Set a timeout to avoid hanging if no response is received
+        const timeoutId = setTimeout(() => {
+          window.removeEventListener('message', messageHandler);
+          console.error('[Lucid] API request timed out after 30 seconds');
+          reject(new Error('API request timed out'));
+        }, 30000);
+
+        // Listen for the response
+        window.addEventListener('message', messageHandler);
+
+        // Send the request to the content script
+        window.postMessage(
+          {
+            type: 'MAKE_API_REQUEST',
+            url: `${LUCID_API_URL}/request`,
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(requestBody),
           },
-          body: JSON.stringify(requestBody),
-        });
+          '*'
+        );
+      });
 
-        if (!serverResponse.ok) {
-          const errorText = await serverResponse.text();
-          throw new Error(`Server error: ${serverResponse.status} - ${errorText}`);
-        }
-
-        const data = await serverResponse.json();
-        console.log('[Lucid] Server response received', data);
+      console.log('[Lucid] Server response received:', response);
       } catch (error) {
         console.error('[Lucid] Error sending transaction:', error);
       }

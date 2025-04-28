@@ -140,7 +140,91 @@ function initializeContentScript() {
             );
           }
         });
+      } else if (event.data.type === 'MAKE_API_REQUEST') {
+      console.log('[Lucid] Received API request from page:', event.data.url);
+      // Check if extension context is still valid
+      if (!chrome.runtime?.id) {
+        console.error(
+          '[Lucid] Extension context invalid - extension may have been reloaded or disabled'
+        );
+        window.postMessage(
+          {
+            type: 'API_REQUEST_RESPONSE',
+            response: null,
+            error: 'Extension context invalid - please refresh the page',
+          },
+          '*'
+        );
+        return;
       }
+
+      // Extract request details from the event data
+      const { url, method, headers, body } = event.data;
+
+      // Forward the request to the background script
+      try {
+        chrome.runtime.sendMessage(
+          {
+            type: 'MAKE_API_REQUEST',
+            url,
+            method,
+            headers,
+            body,
+          },
+          response => {
+            // Check for runtime errors
+            if (chrome.runtime.lastError) {
+              console.error('[Lucid] Error making API request:', chrome.runtime.lastError);
+              window.postMessage(
+                {
+                  type: 'API_REQUEST_RESPONSE',
+                  response: null,
+                  error: chrome.runtime.lastError.message,
+                },
+                '*'
+              );
+              return;
+            }
+
+            // Handle responses with errors
+            if (response?.error) {
+              console.error('[Lucid] API request failed with error:', response.error);
+              window.postMessage(
+                {
+                  type: 'API_REQUEST_RESPONSE',
+                  response: response,
+                  error: response.error,
+                },
+                '*'
+              );
+              return;
+            }
+
+            // Success case
+            console.log('[Lucid] API request successful, sending response to page');
+            window.postMessage(
+              {
+                type: 'API_REQUEST_RESPONSE',
+                response: response,
+              },
+              '*'
+            );
+          }
+        );
+      } catch (error) {
+        // Handle unexpected exceptions
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error('[Lucid] Exception making API request:', errorMessage);
+        window.postMessage(
+          {
+            type: 'API_REQUEST_RESPONSE',
+            response: null,
+            error: errorMessage,
+          },
+          '*'
+        );
+      }
+    }
     });
   } catch (e) {
     console.error('[Lucid] Error:', e);
