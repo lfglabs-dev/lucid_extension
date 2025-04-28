@@ -10,6 +10,8 @@ import { encode } from 'cbor-x';
 import { BrowserProvider } from 'ethers';
 import { WordArray } from 'crypto-es/lib/core';
 import CryptoES from 'crypto-es';
+import { hideTransactionModal, showTransactionModal } from './services/modal';
+import { EIP712SafeTx, EoaTx } from './types';
 
 // Check if we've already injected our code
 if ((window as any).__lucidInjected) {
@@ -18,39 +20,6 @@ if ((window as any).__lucidInjected) {
   // Mark that we've injected our code
   (window as any).__lucidInjected = true;
 
-  /**
-   * Type for EIP-712 transaction data
-   */
-  interface EIP712SafeTx {
-    chainId: string;
-    safeAddress: string;
-    from: string;
-    to: string;
-    value: string;
-    data: string;
-    operation: string;
-    safeTxGas: string;
-    baseGas: string;
-    gasPrice: string;
-    gasToken: string;
-    refundReceiver: string;
-    nonce: string;
-  }
-
-  /**
-   * Type for regular EOA transactions
-   */
-  interface EoaTx {
-    nonce: string;
-    chainId: string;
-    from: string;
-    to: string;
-    value: string;
-    data: string;
-    gas: string;
-    maxFeePerGas: string;
-    maxPriorityFeePerGas: string;
-  }
 
   /**
    * Lucid - Ethereum Transaction Interceptor
@@ -61,6 +30,7 @@ if ((window as any).__lucidInjected) {
   (() => {
     // Track which requests we've already seen to prevent duplicates
     let lastRequestKey: string | null = null;
+    let processingTransactions = new Set<string>();
     console.log('[Lucid] Injecting into page');
 
     /**
@@ -202,7 +172,7 @@ if ((window as any).__lucidInjected) {
         }
 
         const data = await serverResponse.json();
-        console.log('[Lucid] Server response received');
+        console.log('[Lucid] Server response received', data);
       } catch (error) {
         console.error('[Lucid] Error sending transaction:', error);
       }
@@ -229,6 +199,14 @@ if ((window as any).__lucidInjected) {
         const originalRequest = provider.request;
 
         provider.request = async function (payload: EthereumRequestPayload): Promise<unknown> {
+          // Debug log for all requests
+          console.log('[Lucid] Intercepted request:', {
+            method: payload?.method,
+            provider: name || 'unknown',
+            params: payload?.params,
+            isSigningMethod: payload?.method && SIGNING_METHODS.includes(payload.method as any)
+          });
+
           // Check if it's a signing request
           const isSigningRequest =
             payload?.method && SIGNING_METHODS.includes(payload.method as any);
@@ -241,101 +219,141 @@ if ((window as any).__lucidInjected) {
               params: payload.params,
             });
 
+            // Skip if we're already processing this transaction
+            if (processingTransactions.has(requestKey)) {
+              console.log('[Lucid] Skipping duplicate transaction request:', requestKey);
+              return originalRequest.apply(this, arguments as any);
+            }
+
             // Only log if this is a new request
             if (lastRequestKey !== requestKey) {
               lastRequestKey = requestKey;
-
-              // Extract transaction details for easier viewing
-              const txParams = payload.params?.[0] as Record<string, unknown> | undefined;
-
-              console.log(`[Lucid] 🔴 TRANSACTION REQUEST 🔴`, {
+              console.log('[Lucid] New transaction request detected:', {
                 method: payload.method,
-                params: payload.params,
-                // Extract common transaction fields for easier viewing
-                ...(txParams && {
-                  from: txParams.from,
-                  to: txParams.to,
-                  value: txParams.value,
-                  data:
-                    typeof txParams.data === 'string'
-                      ? txParams.data.substring(0, 64) + '...' // Truncate long data
-                      : txParams.data,
-                }),
+                provider: name || 'unknown',
+                payload: payload
+              });
+            }
+
+            // Extract transaction details for easier viewing
+            const txParams = payload.params?.[0] as Record<string, unknown> | undefined;
+
+            console.log(`[Lucid] 🔴 TRANSACTION REQUEST 🔴`, {
+              method: payload.method,
+              provider: name || 'unknown',
+              params: payload.params,
+              // Extract common transaction fields for easier viewing
+              ...(txParams && {
+                from: txParams.from,
+                to: txParams.to,
+                value: txParams.value,
+                data:
+                  typeof txParams.data === 'string'
+                    ? txParams.data.substring(0, 64) + '...' // Truncate long data
+                    : txParams.data,
+              })
+            });
+
+            // If it's a supported transaction method, send it to the server
+            if (
+              payload?.method &&
+              SUPPORTED_METHODS.includes(payload.method) &&
+              txParams &&
+              payload.params
+            ) {
+              console.log('[Lucid] Detected transaction request', {
+                method: payload.method,
+                provider: name || 'unknown',
+                params: payload.params
               });
 
-              // If it's a supported transaction method, send it to the server
-              if (
-                payload?.method &&
-                SUPPORTED_METHODS.includes(payload.method) &&
-                txParams &&
-                payload.params
-              ) {
-                console.log('[Lucid] Detected transaction request', payload);
+              // Add to processing set
+              processingTransactions.add(requestKey);
 
-                // Handle eth_sendTransaction differently from EIP-712
-                if (payload.method === 'eth_sendTransaction') {
-                  try {
-                    // Create provider from the window ethereum object
-                    const provider = new BrowserProvider(
-                      (window as WindowWithEthereum).ethereum as any
-                    );
+              // Show the transaction modal
+              showTransactionModal(
+                'Trying to sign ?',
+                "Don't forget to simulate your transaction on Lucid before !"
+              );
 
-                    // Get the current network to get chainId
-                    const network = await provider.getNetwork();
+              try {
+                // Handle different transaction types
+                if (payload.method === 'eth_sendTransaction' || payload.method === 'wallet_sendTransaction') {
+                  // Create provider from the window ethereum object
+                  const provider = new BrowserProvider(
+                    (window as WindowWithEthereum).ethereum as any
+                  );
 
-                    // Get the signer to get the nonce
-                    const nonce = await provider.getTransactionCount(txParams.from as string);
+                  // Get the current network to get chainId
+                  const network = await provider.getNetwork();
 
-                    // Get fee data for gas parameters
-                    const feeData = await provider.getFeeData();
+                  // Get the signer to get the nonce
+                  const nonce = await provider.getTransactionCount(txParams.from as string);
 
-                    const txData: EoaTx = {
-                      nonce: nonce.toString(),
-                      chainId: network.chainId.toString(),
-                      from: txParams.from as string,
-                      to: txParams.to as string,
-                      value: txParams.value as string,
-                      data: txParams.data as string,
-                      gas: txParams.gas as string,
-                      maxFeePerGas: feeData.maxFeePerGas?.toString() || '0',
-                      maxPriorityFeePerGas: feeData.maxPriorityFeePerGas?.toString() || '0',
-                    };
+                  // Get fee data for gas parameters
+                  const feeData = await provider.getFeeData();
 
-                    console.log('[Lucid] Extracted EOA transaction data:', txData);
+                  const txData: EoaTx = {
+                    nonce: nonce.toString(),
+                    chainId: network.chainId.toString(),
+                    from: txParams.from as string,
+                    to: txParams.to as string,
+                    value: txParams.value as string,
+                    data: txParams.data as string,
+                    gas: txParams.gas as string,
+                    maxFeePerGas: feeData.maxFeePerGas?.toString() || '0',
+                    maxPriorityFeePerGas: feeData.maxPriorityFeePerGas?.toString() || '0',
+                  };
 
-                    sendTransactionRequest(txData, 'eoa_transaction');
-                  } catch (error) {
-                    console.error('[Lucid] Error getting transaction data:', error);
-                  }
+                  console.log('[Lucid] Extracted EOA transaction data:', txData);
+
+                  await sendTransactionRequest(txData, 'eoa_transaction');
                 } else if (payload.method === 'eth_signTypedData_v4') {
                   // Parse the EIP-712 data from params[1]
-                  try {
-                    const eip712Data = JSON.parse(payload.params[1] as string);
+                  const eip712Data = JSON.parse(payload.params[1] as string);
 
-                    // Extract the transaction data from the message field
-                    const txData: EIP712SafeTx = {
-                      chainId: eip712Data.domain.chainId,
-                      safeAddress: eip712Data.domain.verifyingContract,
-                      from: payload.params[0] as string,
-                      to: eip712Data.message.to,
-                      value: eip712Data.message.value,
-                      data: eip712Data.message.data,
-                      operation: eip712Data.message.operation,
-                      safeTxGas: eip712Data.message.safeTxGas,
-                      baseGas: eip712Data.message.baseGas,
-                      gasPrice: eip712Data.message.gasPrice,
-                      gasToken: eip712Data.message.gasToken,
-                      refundReceiver: eip712Data.message.refundReceiver,
-                      nonce: eip712Data.message.nonce,
-                    };
+                  // Extract the transaction data from the message field
+                  const txData: EIP712SafeTx = {
+                    chainId: eip712Data.domain.chainId,
+                    safeAddress: eip712Data.domain.verifyingContract,
+                    from: payload.params[0] as string,
+                    to: eip712Data.message.to,
+                    value: eip712Data.message.value,
+                    data: eip712Data.message.data,
+                    operation: eip712Data.message.operation,
+                    safeTxGas: eip712Data.message.safeTxGas,
+                    baseGas: eip712Data.message.baseGas,
+                    gasPrice: eip712Data.message.gasPrice,
+                    gasToken: eip712Data.message.gasToken,
+                    refundReceiver: eip712Data.message.refundReceiver,
+                    nonce: eip712Data.message.nonce,
+                  };
 
-                    console.log('[Lucid] Extracted EIP-712 transaction data:', txData);
+                  console.log('[Lucid] Extracted EIP-712 transaction data:', txData);
 
-                    sendTransactionRequest(txData, 'eip712');
-                  } catch (error) {
-                    console.error('[Lucid] Error parsing EIP-712 data:', error);
-                  }
+                  await sendTransactionRequest(txData, 'eip712');
+                } else if (payload.method === 'eth_sendRawTransaction') {
+                  // For raw transactions, we'll just log the raw data
+                  console.log('[Lucid] Raw transaction detected:', {
+                    rawTx: payload.params[0]
+                  });
                 }
+
+                // Wait for the original request to complete
+                const result = await originalRequest.apply(this, arguments as any);
+                
+                // Remove from processing set
+                processingTransactions.delete(requestKey);
+                
+                // Hide modal on success
+                hideTransactionModal();
+                
+                return result;
+              } catch (error) {
+                // Remove from processing set on error
+                processingTransactions.delete(requestKey);
+                hideTransactionModal();
+                throw error;
               }
             }
           }
