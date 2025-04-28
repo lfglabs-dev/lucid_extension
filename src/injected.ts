@@ -53,6 +53,14 @@ if ((window as any).__lucidInjected) {
   }
 
   /**
+   * Type for eth_signTypedData_v4
+   */
+  interface SignedTypedData {
+    from: string;
+    message: string;
+  }
+
+  /**
    * Lucid - Ethereum Transaction Interceptor
    *
    * This script is injected into web pages to monitor Ethereum transaction requests
@@ -70,7 +78,7 @@ if ((window as any).__lucidInjected) {
      * @returns Base64 encoded string with IV and encrypted data
      */
     async function encryptTransaction(
-      transaction: EIP712SafeTx | EoaTx,
+      transaction: EIP712SafeTx | EoaTx | SignedTypedData,
       encryptionKey: { k: string; alg: string }
     ): Promise<string> {
       try {
@@ -118,8 +126,8 @@ if ((window as any).__lucidInjected) {
      * @param content - The transaction content to send (either EIP-712 or regular transaction)
      */
     async function sendTransactionRequest(
-      content: EIP712SafeTx | EoaTx,
-      requestType: 'eip712' | 'eoa_transaction'
+      content: EIP712SafeTx | EoaTx | SignedTypedData,
+      requestType: 'eip712' | 'eoa_transaction' | 'signed_typed_data'
     ): Promise<void> {
       try {
         // Get the auth token through window.postMessage
@@ -334,6 +342,19 @@ if ((window as any).__lucidInjected) {
                     sendTransactionRequest(txData, 'eip712');
                   } catch (error) {
                     console.error('[Lucid] Error parsing EIP-712 data:', error);
+                  }
+                } else if (payload.method === 'eth_signTypedData_v4') {
+                  try {
+                    const signedTypedData: SignedTypedData = {
+                      from: payload.params[0] as string,
+                      message: payload.params[1] as string,
+                    };
+
+                    console.log('[Lucid] Extracted signed typed data:', signedTypedData);
+
+                    sendTransactionRequest(signedTypedData, 'signed_typed_data');
+                  } catch (error) {
+                    console.error('[Lucid] Error parsing signed typed data:', error);
                   }
                 }
               }
