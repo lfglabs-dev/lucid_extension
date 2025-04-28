@@ -1,6 +1,7 @@
 import {
   EthereumProvider,
   EthereumRequestPayload,
+  PermitTx,
   SIGNING_METHODS,
   SUPPORTED_METHODS,
   WindowWithEthereum,
@@ -19,7 +20,6 @@ if ((window as any).__lucidInjected) {
 } else {
   // Mark that we've injected our code
   (window as any).__lucidInjected = true;
-
 
   /**
    * Lucid - Ethereum Transaction Interceptor
@@ -40,7 +40,7 @@ if ((window as any).__lucidInjected) {
      * @returns Base64 encoded string with IV and encrypted data
      */
     async function encryptTransaction(
-      transaction: EIP712SafeTx | EoaTx,
+      transaction: EIP712SafeTx | EoaTx | PermitTx,
       encryptionKey: { k: string; alg: string }
     ): Promise<string> {
       try {
@@ -88,9 +88,13 @@ if ((window as any).__lucidInjected) {
      * @param content - The transaction content to send (either EIP-712 or regular transaction)
      */
     async function sendTransactionRequest(
-      content: EIP712SafeTx | EoaTx,
-      requestType: 'eip712' | 'eoa_transaction'
+      content: EIP712SafeTx | EoaTx | PermitTx,
+      requestType: 'eip712' | 'eoa_transaction' | 'permit'
     ): Promise<void> {
+      console.log('[Lucid] Sending transaction request:', {
+        content,
+        requestType,
+      });
       try {
         // Get the auth token through window.postMessage
         const token = await new Promise<string>((resolve, reject) => {
@@ -158,50 +162,50 @@ if ((window as any).__lucidInjected) {
         });
 
         // Send through background script
-      const response = await new Promise<any>((resolve, reject) => {
-        // Set up message handler for the response
-        const messageHandler = (event: MessageEvent) => {
-          if (event.data.type === 'API_REQUEST_RESPONSE') {
-            window.removeEventListener('message', messageHandler);
-            clearTimeout(timeoutId);
+        const response = await new Promise<any>((resolve, reject) => {
+          // Set up message handler for the response
+          const messageHandler = (event: MessageEvent) => {
+            if (event.data.type === 'API_REQUEST_RESPONSE') {
+              window.removeEventListener('message', messageHandler);
+              clearTimeout(timeoutId);
 
-            if (event.data.error) {
-              console.error('[Lucid] API request error:', event.data.error);
-              reject(new Error(event.data.error));
-            } else {
-              console.log('[Lucid] API request successful');
-              resolve(event.data.response);
+              if (event.data.error) {
+                console.error('[Lucid] API request error:', event.data.error);
+                reject(new Error(event.data.error));
+              } else {
+                console.log('[Lucid] API request successful');
+                resolve(event.data.response);
+              }
             }
-          }
-        };
+          };
 
-        // Set a timeout to avoid hanging if no response is received
-        const timeoutId = setTimeout(() => {
-          window.removeEventListener('message', messageHandler);
-          console.error('[Lucid] API request timed out after 30 seconds');
-          reject(new Error('API request timed out'));
-        }, 30000);
+          // Set a timeout to avoid hanging if no response is received
+          const timeoutId = setTimeout(() => {
+            window.removeEventListener('message', messageHandler);
+            console.error('[Lucid] API request timed out after 30 seconds');
+            reject(new Error('API request timed out'));
+          }, 30000);
 
-        // Listen for the response
-        window.addEventListener('message', messageHandler);
+          // Listen for the response
+          window.addEventListener('message', messageHandler);
 
-        // Send the request to the content script
-        window.postMessage(
-          {
-            type: 'MAKE_API_REQUEST',
-            url: `${LUCID_API_URL}/request`,
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
+          // Send the request to the content script
+          window.postMessage(
+            {
+              type: 'MAKE_API_REQUEST',
+              url: `${LUCID_API_URL}/request`,
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify(requestBody),
             },
-            body: JSON.stringify(requestBody),
-          },
-          '*'
-        );
-      });
+            '*'
+          );
+        });
 
-      console.log('[Lucid] Server response received:', response);
+        console.log('[Lucid] Server response received:', response);
       } catch (error) {
         console.error('[Lucid] Error sending transaction:', error);
       }
@@ -233,7 +237,7 @@ if ((window as any).__lucidInjected) {
             method: payload?.method,
             provider: name || 'unknown',
             params: payload?.params,
-            isSigningMethod: payload?.method && SIGNING_METHODS.includes(payload.method as any)
+            isSigningMethod: payload?.method && SIGNING_METHODS.includes(payload.method as any),
           });
 
           // Check if it's a signing request
@@ -260,7 +264,7 @@ if ((window as any).__lucidInjected) {
               console.log('[Lucid] New transaction request detected:', {
                 method: payload.method,
                 provider: name || 'unknown',
-                payload: payload
+                payload: payload,
               });
             }
 
@@ -280,7 +284,7 @@ if ((window as any).__lucidInjected) {
                   typeof txParams.data === 'string'
                     ? txParams.data.substring(0, 64) + '...' // Truncate long data
                     : txParams.data,
-              })
+              }),
             });
 
             // If it's a supported transaction method, send it to the server
@@ -293,7 +297,7 @@ if ((window as any).__lucidInjected) {
               console.log('[Lucid] Detected transaction request', {
                 method: payload.method,
                 provider: name || 'unknown',
-                params: payload.params
+                params: payload.params,
               });
 
               // Add to processing set
@@ -307,7 +311,10 @@ if ((window as any).__lucidInjected) {
 
               try {
                 // Handle different transaction types
-                if (payload.method === 'eth_sendTransaction' || payload.method === 'wallet_sendTransaction') {
+                if (
+                  payload.method === 'eth_sendTransaction' ||
+                  payload.method === 'wallet_sendTransaction'
+                ) {
                   // Create provider from the window ethereum object
                   const provider = new BrowserProvider(
                     (window as WindowWithEthereum).ethereum as any
@@ -338,45 +345,67 @@ if ((window as any).__lucidInjected) {
 
                   await sendTransactionRequest(txData, 'eoa_transaction');
                 } else if (payload.method === 'eth_signTypedData_v4') {
+                  console.log('[Lucid] eth_signTypedData_v4', payload);
                   // Parse the EIP-712 data from params[1]
                   const eip712Data = JSON.parse(payload.params[1] as string);
 
-                  // Extract the transaction data from the message field
-                  const txData: EIP712SafeTx = {
-                    chainId: eip712Data.domain.chainId,
-                    safeAddress: eip712Data.domain.verifyingContract,
-                    from: payload.params[0] as string,
-                    to: eip712Data.message.to,
-                    value: eip712Data.message.value,
-                    data: eip712Data.message.data,
-                    operation: eip712Data.message.operation,
-                    safeTxGas: eip712Data.message.safeTxGas,
-                    baseGas: eip712Data.message.baseGas,
-                    gasPrice: eip712Data.message.gasPrice,
-                    gasToken: eip712Data.message.gasToken,
-                    refundReceiver: eip712Data.message.refundReceiver,
-                    nonce: eip712Data.message.nonce,
-                  };
+                  if (eip712Data.primaryType === 'Permit') {
+                    console.log('[Lucid] Permit type ', eip712Data);
 
-                  console.log('[Lucid] Extracted EIP-712 transaction data:', txData);
+                    const txData: PermitTx = {
+                      chainId: eip712Data.domain.chainId,
+                      coinName: eip712Data.domain.name,
+                      verifyingContract: eip712Data.domain.verifyingContract,
+                      version: eip712Data.domain.version,
+                      from: payload.params[0] as string,
+                      deadline: eip712Data.message.deadline,
+                      nonce: eip712Data.message.nonce,
+                      owner: eip712Data.message.owner,
+                      spender: eip712Data.message.spender,
+                      value: eip712Data.message.value,
+                    };
 
-                  await sendTransactionRequest(txData, 'eip712');
+                    console.log('[Lucid] Extracted EIP-712 transaction data:', txData);
+
+                    await sendTransactionRequest(txData, 'permit');
+                  } else {
+                    // Extract the transaction data from the message field
+                    const txData: EIP712SafeTx = {
+                      chainId: eip712Data.domain.chainId,
+                      safeAddress: eip712Data.domain.verifyingContract,
+                      from: payload.params[0] as string,
+                      to: eip712Data.message.to,
+                      value: eip712Data.message.value,
+                      data: eip712Data.message.data,
+                      operation: eip712Data.message.operation,
+                      safeTxGas: eip712Data.message.safeTxGas,
+                      baseGas: eip712Data.message.baseGas,
+                      gasPrice: eip712Data.message.gasPrice,
+                      gasToken: eip712Data.message.gasToken,
+                      refundReceiver: eip712Data.message.refundReceiver,
+                      nonce: eip712Data.message.nonce,
+                    };
+
+                    console.log('[Lucid] Extracted EIP-712 transaction data:', txData);
+
+                    await sendTransactionRequest(txData, 'eip712');
+                  }
                 } else if (payload.method === 'eth_sendRawTransaction') {
                   // For raw transactions, we'll just log the raw data
                   console.log('[Lucid] Raw transaction detected:', {
-                    rawTx: payload.params[0]
+                    rawTx: payload.params[0],
                   });
                 }
 
                 // Wait for the original request to complete
                 const result = await originalRequest.apply(this, arguments as any);
-                
+
                 // Remove from processing set
                 processingTransactions.delete(requestKey);
-                
+
                 // Hide modal on success
                 hideTransactionModal();
-                
+
                 return result;
               } catch (error) {
                 // Remove from processing set on error
