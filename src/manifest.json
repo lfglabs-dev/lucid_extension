@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Lucid",
+  "name": "Lucid Interceptor",
   "version": "1.0.3",
-  "description": "Lucid: Clear Signing for crypto wallets",
+  "description": "Lucid Interceptor: Clear Signing for crypto wallets",
   "icons": {
     "16": "icons/lucid16.png",
     "48": "icons/lucid48.png",
