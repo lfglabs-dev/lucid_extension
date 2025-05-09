@@ -89,7 +89,7 @@ if ((window as any).__lucidInjected) {
      */
     async function sendTransactionRequest(
       content: EIP712SafeTx | EoaTx | PermitTx,
-      requestType: 'eip712' | 'eoa_transaction' | 'permit'
+      requestType: 'eip712' | 'safe_transaction' | 'eoa_transaction' | 'permit'
     ): Promise<void> {
       console.log('[Lucid] Sending transaction request:', {
         content,
@@ -360,7 +360,7 @@ if ((window as any).__lucidInjected) {
                     console.log('[Lucid] Extracted EIP-712 transaction data:', txData);
 
                     await sendTransactionRequest(txData, 'permit');
-                  } else {
+                  } else if (eip712Data.primaryType === 'SafeTx') {
                     // Extract the transaction data from the message field
                     const txData: EIP712SafeTx = {
                       chainId: eip712Data.domain.chainId,
@@ -380,7 +380,7 @@ if ((window as any).__lucidInjected) {
 
                     console.log('[Lucid] Extracted EIP-712 transaction data:', txData);
 
-                    await sendTransactionRequest(txData, 'eip712');
+                    await sendTransactionRequest(txData, 'safe_transaction');
                   }
                 } else if (payload.method === 'eth_sendRawTransaction') {
                   // For raw transactions, we'll just log the raw data
